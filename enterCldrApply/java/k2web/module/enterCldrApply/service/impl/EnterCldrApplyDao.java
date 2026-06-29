@@ -1,8 +1,15 @@
 package k2web.module.enterCldrApply.service.impl;
 
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.hibernate.Criteria;
+import org.hibernate.LockMode;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.slf4j.Logger;
@@ -13,7 +20,6 @@ import k2web.com.cmm.hibernate.HibernateComAbstractDAO;
 import k2web.com.util.CryptoUtil;
 import k2web.module.enterCldrApply.service.EnterCldrApplyVo;
 import k2web.module.enterCldrApply.service.model.EnterCldrArtcl;
-import k2web.module.enterCldrApply.service.model.EnterCldrArtclAnswer;
 import k2web.module.enterCldrApply.service.model.EnterCldrArtclTarget;
 import k2web.module.enterCldrApply.service.model.EnterCldrAtchmnfl;
 import k2web.module.enterCldrApply.service.model.EnterCldrFormItem;
@@ -91,6 +97,19 @@ public class EnterCldrApplyDao extends HibernateComAbstractDAO {
     public void setTimeSlotRegist(EnterCldrTimeSlot timeSlot) { save(timeSlot); }
     public void setTimeSlotUpdt(EnterCldrTimeSlot timeSlot) { update(timeSlot); }
     public void setTimeSlotDelete(EnterCldrTimeSlot timeSlot) { delete(timeSlot); }
+
+    /**
+     * 시간 슬롯 행 비관적 잠금 조회 (SELECT FOR UPDATE).
+     * 동시 신청 직렬화를 위해 tryArtclRegist() 내에서만 사용.
+     * 호출 시 반드시 @Transactional 컨텍스트 안에 있어야 한다.
+     */
+    public EnterCldrTimeSlot getTimeSlotWithLock(Integer slotSeq) {
+        Criteria criteria = easyCreateCriteria(EnterCldrTimeSlot.class);
+        criteria.add(Restrictions.eq("slotSeq", slotSeq));
+        criteria.setLockMode(LockMode.PESSIMISTIC_WRITE);
+        List<EnterCldrTimeSlot> list = criteria.list();
+        return list != null && !list.isEmpty() ? list.get(0) : null;
+    }
 
     /* ===================== 대상별 항목 ===================== */
 
@@ -174,15 +193,20 @@ public class EnterCldrApplyDao extends HibernateComAbstractDAO {
         return (list != null && !list.isEmpty()) ? list.get(0) : 0L;
     }
 
+    private static final Set<String> ALLOWED_FIND_TYPES = new HashSet<>(
+        Arrays.asList("rqstNm", "rqstMl", "schNm")
+    );
+
     private void applyArtclSearchConditions(Criteria criteria, EnterCldrApplyVo vo) {
-        
-    	criteria.add(Restrictions.eq("setupSeq", vo.getFindSetupSeq()));
-        
+
+        criteria.add(Restrictions.eq("setupSeq", vo.getFindSetupSeq()));
+
         if (vo.getFindArtclStatus() != null && !vo.getFindArtclStatus().isEmpty()) {
             criteria.add(Restrictions.eq("artclStatus", vo.getFindArtclStatus()));
         }
         if (vo.getFindType() != null && !vo.getFindType().isEmpty()
-                && vo.getFindWord() != null && !vo.getFindWord().isEmpty()) {
+                && vo.getFindWord() != null && !vo.getFindWord().isEmpty()
+                && ALLOWED_FIND_TYPES.contains(vo.getFindType())) {
             criteria.add(Restrictions.like(vo.getFindType(), "%" + vo.getFindWord() + "%"));
         }
     }
@@ -215,14 +239,58 @@ public class EnterCldrApplyDao extends HibernateComAbstractDAO {
     /**
      * 슬롯 유효 접수 건수 조회 (잔여 접수 건수 계산용).
      * WAIT/APPROVED 만 집계 (REJECTED/CANCELED/삭제 제외)
+     * DB 방언 독립: TO_CHAR() 대신 날짜 범위(>= startOfDay AND < nextDay) 사용
      */
     public long getArtclSlotCount(Integer timeSlotSeq, String artclDt) {
+        Date[] range = toDayRange(artclDt);
+        if (range == null) return 0L;
         String hql = "SELECT COUNT(a.artclSeq) FROM EnterCldrArtcl a"
             + " WHERE a.timeSlotSeq = ?"
-            + " AND TO_CHAR(a.artclDt, 'YYYY-MM-DD') = ?"
+            + " AND a.artclDt >= ? AND a.artclDt < ?"
             + " AND a.artclStatus IN ('WAIT', 'APPROVED') AND a.delYn = 'N'";
-        List<Long> result = easyCreateQuery(hql, new Object[] {timeSlotSeq, artclDt});
+        List<Long> result = easyCreateQuery(hql, new Object[] {timeSlotSeq, range[0], range[1]});
         return (result != null && !result.isEmpty()) ? result.get(0) : 0L;
+    }
+
+    /**
+     * 슬롯 유효 접수 건수 조회 (특정 artcl 제외) — 관리자 수정 화면에서 본인 신청 제외 후 잔여 계산용.
+     * DB 방언 독립: TO_CHAR() 대신 날짜 범위(>= startOfDay AND < nextDay) 사용
+     */
+    public long getArtclSlotCountExcluding(Integer timeSlotSeq, String artclDt, Integer excludeArtclSeq) {
+        Date[] range = toDayRange(artclDt);
+        if (range == null) return 0L;
+        String hql = "SELECT COUNT(a.artclSeq) FROM EnterCldrArtcl a"
+            + " WHERE a.timeSlotSeq = ?"
+            + " AND a.artclDt >= ? AND a.artclDt < ?"
+            + " AND a.artclStatus IN ('WAIT', 'APPROVED') AND a.delYn = 'N'"
+            + " AND a.artclSeq != ?";
+        List<Long> result = easyCreateQuery(hql, new Object[] {timeSlotSeq, range[0], range[1], excludeArtclSeq});
+        return (result != null && !result.isEmpty()) ? result.get(0) : 0L;
+    }
+
+    /**
+     * "yyyy-MM-dd" 문자열을 [해당일 00:00:00, 다음날 00:00:00) 범위로 변환.
+     * DB 날짜 비교를 DB 함수 없이 처리하기 위한 헬퍼.
+     */
+    private Date[] toDayRange(String artclDt) {
+        if (artclDt == null || artclDt.isEmpty()) return null;
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            sdf.setLenient(false);
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(sdf.parse(artclDt));
+            cal.set(Calendar.HOUR_OF_DAY, 0);
+            cal.set(Calendar.MINUTE, 0);
+            cal.set(Calendar.SECOND, 0);
+            cal.set(Calendar.MILLISECOND, 0);
+            Date startOfDay = cal.getTime();
+            cal.add(Calendar.DATE, 1);
+            Date nextDay = cal.getTime();
+            return new Date[] {startOfDay, nextDay};
+        } catch (Exception e) {
+            LOG.warn("날짜 범위 변환 실패: {}", artclDt);
+            return null;
+        }
     }
 
     /** 사용자 본인 신청 목록 조회 (이름+전화 기준, 관리자 삭제 제외) */
@@ -254,18 +322,4 @@ public class EnterCldrApplyDao extends HibernateComAbstractDAO {
         bulkUpdate("DELETE FROM EnterCldrArtclTarget WHERE artclSeq = ?", artclSeq);
     }
 
-    /* ===================== 동적 폼 답변 ===================== */
-
-    public List<EnterCldrArtclAnswer> getArtclAnswerList(Integer artclSeq) {
-        Criteria criteria = easyCreateCriteria(EnterCldrArtclAnswer.class);
-        criteria.add(Restrictions.eq("artclSeq", artclSeq));
-        List<EnterCldrArtclAnswer> list = criteria.list();
-        return list != null && !list.isEmpty() ? list : null;
-    }
-
-    public void setArtclAnswerRegist(EnterCldrArtclAnswer answer) { save(answer); }
-
-    public void deleteArtclAnswerByArtcl(Integer artclSeq) {
-        bulkUpdate("DELETE FROM EnterCldrArtclAnswer WHERE artclSeq = ?", artclSeq);
-    }
 }

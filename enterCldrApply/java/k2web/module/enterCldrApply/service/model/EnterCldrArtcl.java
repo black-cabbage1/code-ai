@@ -85,6 +85,9 @@ public class EnterCldrArtcl extends Statics {
 
     @Column(name = "UPDDE", nullable = false)
     private Date updde;
+    
+    @Column(name = "STATUS_UPDDE", nullable = false)
+    private Date statusUpdde;
 
     /* ─── 추가 항목 (동적 폼 항목 답변 저장용) ─── */
     @Column(name = "ADDITM1")  private String additm1;
@@ -182,4 +185,10 @@ public class EnterCldrArtcl extends Statics {
 
     public String getApplyTime() { return applyTime; }
     public void setApplyTime(String v) { this.applyTime = v; }
+	public Date getStatusUpdde() {
+		return statusUpdde;
+	}
+	public void setStatusUpdde(Date statusUpdde) {
+		this.statusUpdde = statusUpdde;
+	}
 }

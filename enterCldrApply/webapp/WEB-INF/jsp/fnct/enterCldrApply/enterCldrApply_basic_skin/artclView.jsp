@@ -3,7 +3,7 @@
 
 <c:if test='${layout==null || layout==""}'>
 <%@ include file="/WEB-INF/jsp/include/user/header.jsp" %>
-<%@ include file="/WEB-INF/jsp/fnct/enterCldrApply/enterCldrApply_basic_skin/main.head.jsp" %>
+<%@ include file="/WEB-INF/jsp/fnct/enterCldrApply/enterCldrApply_basic_skin/artclView.head.jsp" %>
 <%@ include file="/WEB-INF/jsp/include/user/body.jsp" %>
 </c:if>
 
@@ -11,116 +11,120 @@
 
 <c:choose>
     <c:when test="${artcl == null}">
-    <div style="text-align:center; padding:50px; color:#999;">
-        신청 정보를 찾을 수 없습니다.
+    <div class="white-box">
+        <div class="no-result" style="text-align:center; padding:5rem; color:#999; font-size:1.5rem;">
+            신청 정보를 찾을 수 없습니다.
+        </div>
     </div>
     </c:when>
     <c:otherwise>
 
-    <%-- canModify는 컨트롤러에서 전달; artclView에는 전달 안 하므로 JS에서 링크 클릭 시 서버 검증에 맡김 --%>
     <c:set var="canCancel" value="${artcl.artclStatus == 'WAIT'}"/>
 
-    <div class="cldr-view-header">
-        <c:out value="${artcl.rqstNm}"/>님은 신청
-        <c:choose>
-            <c:when test="${artcl.artclStatus == 'WAIT'}">대기</c:when>
-            <c:when test="${artcl.artclStatus == 'APPROVED'}">완료</c:when>
-            <c:when test="${artcl.artclStatus == 'CANCELED'}">취소</c:when>
-            <c:otherwise>처리</c:otherwise>
-        </c:choose>
-        되었습니다.
-    </div>
-
-    <table class="cldr-view-table">
-        <tr>
-            <th>신청 일자</th>
-            <td>
-                <fmt:formatDate value="${artcl.artclDt}" pattern="yyyy-MM-dd"/>
-                <c:if test="${not empty artcl.applyTime}">
-                    (<c:out value="${artcl.applyTime}"/>)
-                </c:if>
-            </td>
-        </tr>
-        <tr>
-            <th>이름</th>
-            <td><c:out value="${artcl.rqstNm}"/></td>
-        </tr>
-        <tr>
-            <th>휴대전화</th>
-            <td><c:out value="${artcl.rqstTel}"/></td>
-        </tr>
-        <c:if test="${not empty artcl.rqstMl}">
-        <tr>
-            <th>이메일</th>
-            <td><c:out value="${artcl.rqstMl}"/></td>
-        </tr>
-        </c:if>
-        <c:if test="${not empty artcl.schNm}">
-        <tr>
-            <th>고교명</th>
-            <td>
-                <c:out value="${artcl.schNm}"/>
-                <c:if test="${not empty artcl.schLc}">
-                    (<c:out value="${artcl.schLc}"/>)
-                </c:if>
-            </td>
-        </tr>
-        </c:if>
-        <c:if test="${setup.companionUseYn == 'Y'}">
-        <tr>
-            <th>동행 인원</th>
-            <td><c:out value="${artcl.companionCnt}"/> 명</td>
-        </tr>
-        </c:if>
-        <c:if test="${setup.targetCompUseYn == 'Y' && artcl.targetList != null && fn:length(artcl.targetList) > 0}">
-        <tr>
-            <th>대상별 인원</th>
-            <td>
-                <c:forEach var="target" items="${artcl.targetList}">
-                    <c:out value="${target.targetNm}"/>: <c:out value="${target.compCnt}"/>명<br>
-                </c:forEach>
-            </td>
-        </tr>
-        </c:if>
-        <c:if test="${artcl.answerList != null && fn:length(artcl.answerList) > 0}">
-            <c:forEach var="answer" items="${artcl.answerList}">
-            <tr>
-                <th><c:out value="${answer.itemNm}"/></th>
-                <td><c:out value="${answer.answerVal}"/></td>
-            </tr>
-            </c:forEach>
-        </c:if>
-        <tr>
-            <th>신청 상태</th>
-            <td>
+    <div class="white-box">
+        <%-- 상태 배너 --%>
+        <div class="func-banner">
+            <div class="box">
+                <c:out value="${artcl.rqstNm}"/>님의 신청이
                 <c:choose>
-                    <c:when test="${artcl.artclStatus == 'WAIT'}">
-                        <span class="artcl-status-wait">승인대기</span>
-                    </c:when>
-                    <c:when test="${artcl.artclStatus == 'APPROVED'}">
-                        <span class="artcl-status-approved">승인</span>
-                    </c:when>
-                    <c:when test="${artcl.artclStatus == 'REJECTED'}">
-                        <span class="artcl-status-rejected">미승인</span>
-                    </c:when>
-                    <c:when test="${artcl.artclStatus == 'CANCELED'}">
-                        <span class="artcl-status-canceled">취소</span>
-                    </c:when>
-                    <c:otherwise><c:out value="${artcl.artclStatus}"/></c:otherwise>
+                    <c:when test="${artcl.artclStatus == 'WAIT'}">접수되었습니다.</c:when>
+                    <c:when test="${artcl.artclStatus == 'APPROVED'}">승인되었습니다.</c:when>
+                    <c:when test="${artcl.artclStatus == 'CANCELED'}">취소되었습니다.</c:when>
+                    <c:otherwise>처리되었습니다.</c:otherwise>
                 </c:choose>
-            </td>
-        </tr>
-    </table>
+            </div>
+        </div>
 
-    <div class="cldr-btn-area">
-        <c:if test="${artcl.artclStatus == 'WAIT'}">
-        <button class="cldr-btn cldr-btn-primary" onclick="jf_goUpdt();">수정</button>
-        </c:if>
-        <c:if test="${canCancel}">
-        <button class="cldr-btn cldr-btn-secondary" onclick="jf_cancel();">취소</button>
-        </c:if>
-        <button class="cldr-btn cldr-btn-gray"
-            onclick="location.href=kurl('/enterCldrApply/${vo.siteId}/${vo.fnctNo}/artclSearch');">이전으로</button>
+        <%-- 상세 정보 --%>
+        <div class="func-result mt30">
+            <div class="row">
+                <div class="title">신청 일자</div>
+                <div class="insert">
+                    <fmt:formatDate value="${artcl.artclDt}" pattern="yyyy-MM-dd"/>
+                    <c:if test="${not empty artcl.applyTime}">
+                        &nbsp;(<c:out value="${artcl.applyTime}"/>)
+                    </c:if>
+                </div>
+            </div>
+            <div class="row">
+                <div class="title">이름</div>
+                <div class="insert"><c:out value="${artcl.rqstNm}"/></div>
+            </div>
+            <div class="row">
+                <div class="title">휴대전화</div>
+                <div class="insert"><c:out value="${artcl.rqstTel}"/></div>
+            </div>
+            <c:if test="${not empty artcl.rqstMl}">
+            <div class="row">
+                <div class="title">이메일</div>
+                <div class="insert"><c:out value="${artcl.rqstMl}"/></div>
+            </div>
+            </c:if>
+            <c:if test="${not empty artcl.schNm}">
+            <div class="row">
+                <div class="title">고교명</div>
+                <div class="insert">
+                    <c:out value="${artcl.schNm}"/>
+                    <c:if test="${not empty artcl.schLc}">
+                        &nbsp;(<c:out value="${artcl.schLc}"/>)
+                    </c:if>
+                </div>
+            </div>
+            </c:if>
+            <c:if test="${setup.companionUseYn == 'Y'}">
+            <div class="row">
+                <div class="title">동행 인원</div>
+                <div class="insert"><c:out value="${artcl.companionCnt}"/> 명</div>
+            </div>
+            </c:if>
+            <c:if test="${setup.targetCompUseYn == 'Y' && artcl.targetList != null && fn:length(artcl.targetList) > 0}">
+            <div class="row">
+                <div class="title">대상별 인원</div>
+                <div class="insert">
+                    <c:forEach var="target" items="${artcl.targetList}">
+                        <c:out value="${target.targetNm}"/>: <c:out value="${target.compCnt}"/>명&nbsp;
+                    </c:forEach>
+                </div>
+            </div>
+            </c:if>
+            <c:if test="${artcl.dynamicFormItems != null && fn:length(artcl.dynamicFormItems) > 0}">
+                <c:forEach var="addItm" items="${artcl.dynamicFormItems}">
+                <div class="row">
+                    <div class="title"><c:out value="${addItm.itemNm}"/></div>
+                    <div class="insert"><c:out value="${addItm.answerVal}"/></div>
+                </div>
+                </c:forEach>
+            </c:if>
+            <div class="row">
+                <div class="title">신청 상태</div>
+                <div class="insert">
+                    <c:choose>
+                        <c:when test="${artcl.artclStatus == 'WAIT'}">
+                            <span class="artcl-status-wait">승인대기</span>
+                        </c:when>
+                        <c:when test="${artcl.artclStatus == 'APPROVED'}">
+                            <span class="artcl-status-approved">승인</span>
+                        </c:when>
+                        <c:when test="${artcl.artclStatus == 'REJECTED'}">
+                            <span class="artcl-status-rejected">미승인</span>
+                        </c:when>
+                        <c:when test="${artcl.artclStatus == 'CANCELED'}">
+                            <span class="artcl-status-canceled">취소</span>
+                        </c:when>
+                        <c:otherwise><c:out value="${artcl.artclStatus}"/></c:otherwise>
+                    </c:choose>
+                </div>
+            </div>
+        </div>
+
+        <%-- 버튼 영역 --%>
+        <div class="flex-center mt40">
+            <button class="btn-func2 color1" onclick="jf_goUpdt('${artcl.artclStatus}');">수정</button>
+            <c:if test="${canCancel}">
+            <button class="btn-func2 color2 ml10" onclick="jf_cancel();">취소</button>
+            </c:if>
+            <button class="btn-func2 color2 ml10" onclick="jf_list();">이전으로</button>
+        </div>
     </div>
 
     </c:otherwise>
@@ -128,30 +132,16 @@
 
 </div><%-- ._fnctWrap --%>
 
-<script>
-var SITE_ID   = "${vo.siteId}";
-var FNCT_NO   = "${vo.fnctNo}";
-var ARTCL_SEQ = "${artcl.artclSeq}";
-function jf_goUpdt() {
-    location.href = kurl('/enterCldrApply/' + SITE_ID + '/' + FNCT_NO + '/' + ARTCL_SEQ + '/artclUpdtView');
-}
+<form id="frm" name="frm" method="post" action="">
+	<input type="hidden" name="layout" id="layout" value='<c:out value="${layout}"/>'>
+	<input type="hidden" name="rqstNm" value='<c:out value="${artcl.rqstNm}"/>'>
+	<input type="hidden" name="rqstTel" value='<c:out value="${artcl.rqstTel}"/>'>
+	<input type="hidden" id="siteId" value='<c:out value="${vo.siteId}"/>'>
+	<input type="hidden" id="fnctNo" value='<c:out value="${vo.fnctNo}"/>'>
+</form>
 
-function jf_cancel() {
-    var rqstNm  = sessionStorage.getItem('cldrSrchRqstNm') || '';
-    var rqstTel = sessionStorage.getItem('cldrSrchRqstTel') || '';
-    confirm('신청을 취소하시겠습니까? 취소 후에는 되돌릴 수 없습니다.', function() {
-        $.ajax({
-            url : kurl('/enterCldrApply/' + SITE_ID + '/' + FNCT_NO + '/' + ARTCL_SEQ + '/artclCancelProc'),
-            type: 'POST',
-            data: { rqstNm: rqstNm, rqstTel: rqstTel },
-            success: function(r) {
-                if (r.message) { alert(r.message); return; }
-                alert('취소되었습니다.', function() { location.reload(); });
-            }
-        });
-    }, function() {});
-}
-</script>
+<input type="hidden" id="artclSeq" value='<c:out value="${artcl.artclSeq}"/>'>
+<input type="hidden" id="canModify" value='<c:out value="${canModify}"/>'>
 
 <c:if test='${layout==null || layout==""}'>
 <%@ include file="/WEB-INF/jsp/fnct/enterCldrApply/enterCldrApply_basic_skin/artclView.js.jsp" %>

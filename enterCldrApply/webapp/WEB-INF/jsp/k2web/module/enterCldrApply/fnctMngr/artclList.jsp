@@ -8,6 +8,12 @@
 
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_header.jsp"%>
 
+<style>
+.ecl-col-action   { width: 210px; }
+.ecl-nowrap       { white-space: nowrap; }
+.ecl-sel-status   { width: 82px; }
+</style>
+
 <script>
 function jf_search() {
     document.frm.page.value = 1;
@@ -52,6 +58,26 @@ function jf_artclDelete(artclSeq) {
     );
 }
 
+function jf_artclDelete(artclSeq) {
+    confirm("삭제하시겠습니까?",
+        function() {
+            $.ajax({
+                url  : kurl("/enterCldrApply/fnctMngr/${vo.siteId}/${setup.setupSeq}/" + artclSeq + "/artclDeleteProc"),
+                type : "POST",
+                success: function(result) {
+                    if (result.message) { alert(result.message); } else { location.reload(); }
+                }
+            });
+        },
+        function() {}
+    );
+}
+
+function jf_excelDown(siteId, setupSeq){
+	document.frm.action = "/enterCldrApply/fnctMngr/"+siteId+"/"+setupSeq+"/excelDown.do";
+	document.frm.submit();
+}
+
 function page_link(page) {
     document.frm.page.value = page;
     document.frm.submit();
@@ -80,9 +106,7 @@ function page_link(page) {
                     <option value="rqstNm" ${vo.findType == 'rqstNm' ? 'selected' : ''}>신청자명</option>
                     <option value="schNm"  ${vo.findType == 'schNm'  ? 'selected' : ''}>학교명</option>
                 </select>
-                <input type="text" name="findWord" value="<c:out value='${vo.findWord}'/>"
-                    placeholder="검색어를 입력하세요."
-                    onkeypress="if(event.keyCode=='13') jf_search();">
+                <input type="text" name="findWord" value="<c:out value='${vo.findWord}'/>" placeholder="검색어를 입력하세요." onkeypress="if(event.keyCode=='13') jf_search();">
                 <span class="_button _small _active">
                     <a href="#none" onclick="jf_search();">검색</a>
                 </span>
@@ -94,11 +118,12 @@ function page_link(page) {
         <colgroup>
             <col class="_num">
             <col class="_w120">
+            <col class="_w120">
             <col class="_auto">
-            <col class="_w250">
+            <col class="_w300">
             <col class="_w80">
             <col class="_w80">
-            <col style="width:210px;">
+            <col class="ecl-col-action">
             <col class="_w130">
             <col class="_w130">
             <col class="_w80">
@@ -107,6 +132,7 @@ function page_link(page) {
             <tr>
                 <th>번호</th>
                 <th>신청 일자</th>
+                <th>신청 시각</th>
                 <th>신청자</th>
                 <th>학교명</th>
                 <th>동반인원</th>
@@ -125,11 +151,21 @@ function page_link(page) {
                             <td>${pageNavi.count-((vo.page-1)*vo.row)-stat.index}</td>
                             <td><fmt:formatDate value="${artcl.artclDt}" pattern="yyyy-MM-dd"/></td>
                             <td>
+                                <c:choose>
+                                    <c:when test="${not empty artcl.applyTime}">${artcl.applyTime}</c:when>
+                                    <c:otherwise>-</c:otherwise>
+                                </c:choose>
+                            </td>
+                            <td>
                                 <a href="#none" onclick="jf_artclView('${artcl.artclSeq}');">
                                     <c:out value="${artcl.rqstNm}"/>
                                 </a>
                             </td>
-                            <td><c:out value="${artcl.schNm}"/></td>
+                            <td>
+                            	<c:out value="${artcl.schNm}"/>
+					            <c:if test="${not empty artcl.schLc}"> (<c:out value="${artcl.schLc}"/>)</c:if>
+					            <c:if test="${not empty artcl.schTp}"> / <c:out value="${artcl.schTp}"/></c:if>
+                            </td>
                             <td>
                                 <c:choose>
                                     <c:when test="${artcl.companionCnt != null}">${artcl.companionCnt}명</c:when>
@@ -144,8 +180,8 @@ function page_link(page) {
                                     <c:otherwise><span class="artcl-status">승인대기</span></c:otherwise>
                                 </c:choose>
                             </td>
-                            <td style="white-space:nowrap;">
-                                <select id="status_${artcl.artclSeq}" style="width:82px;">
+                            <td class="ecl-nowrap">
+                                <select id="status_${artcl.artclSeq}" class="ecl-sel-status">
                                     <option value="WAIT"     ${artcl.artclStatus == 'WAIT'     ? 'selected' : ''}>승인대기</option>
                                     <option value="APPROVED" ${artcl.artclStatus == 'APPROVED' ? 'selected' : ''}>승인</option>
                                     <option value="REJECTED" ${artcl.artclStatus == 'REJECTED' ? 'selected' : ''}>미승인</option>
@@ -175,14 +211,20 @@ function page_link(page) {
                     </c:forEach>
                 </c:when>
                 <c:otherwise>
-                    <tr><td colspan="10" class="_noData">신청 내역이 없습니다.</td></tr>
+                    <tr><td colspan="11" class="_noData">신청 내역이 없습니다.</td></tr>
                 </c:otherwise>
             </c:choose>
         </tbody>
     </table>
 
     <k:page value="pageNavi" script="page_link"/>
-
+	
+	<div class="_areaButton">
+		<div class="_right">
+			<span class="_button _large _white"><a href="#none" onclick="javascript:jf_excelDown('${vo.siteId}','${setup.setupSeq}');">엑셀다운로드</a></span>
+		</div>
+	</div>
+	
 </form>
-
+        
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_footer.jsp"%>

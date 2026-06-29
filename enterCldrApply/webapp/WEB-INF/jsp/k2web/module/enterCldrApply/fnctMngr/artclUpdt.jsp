@@ -9,20 +9,58 @@
 
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_header.jsp"%>
 
+<style>
+/* 신청 수정 폼 */
+.ecl-input-date  { width: 160px; }
+.ecl-slot-lbl    { margin-right: 14px; }
+.ecl-req         { color: #c00; }
+.ecl-input-w220  { width: 220px; }
+.ecl-input-w80   { width: 80px; }
+.ecl-input-w70   { width: 70px; }
+.ecl-input-w300  { width: 300px; }
+.ecl-tbl-target  { width: 60%; }
+.ecl-col-350     { width: 350px; }
+.ecl-opt-lbl     { margin-right: 12px; }
+/* 학교 검색 레이어 */
+.ecl-school-layer                { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.4); z-index: 9999; }
+.ecl-school-inner                { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #fff; border-radius: 6px; width: 480px; max-height: 70vh; overflow: hidden; display: flex; flex-direction: column; }
+.ecl-school-header               { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #ddd; }
+.ecl-school-close                { font-size: 18px; color: #555; text-decoration: none; }
+.ecl-school-search               { padding: 12px 18px; border-bottom: 1px solid #eee; display: flex; gap: 8px; }
+.ecl-school-search input[type=text] { flex: 1; padding: 6px; }
+.ecl-school-results              { overflow-y: auto; max-height: 340px; padding: 8px 0; }
+.ecl-school-results ul           { list-style: none; margin: 0; padding: 0; }
+.ecl-school-item                 { padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.ecl-school-item:hover           { background: #f5f5f5; }
+.ecl-school-item-nm              { font-weight: bold; }
+.ecl-school-item-info            { font-size: 12px; color: #888; }
+.ecl-school-no-result            { padding: 10px; color: #999; }
+/* 전화번호·이메일 입력 */
+.ecl-phone1      { width: 55px; }
+.ecl-phone-part  { width: 70px; }
+.ecl-email-part  { width: 150px; }
+.ecl-email-domain{ margin-left: 6px; }
+/* 시간 슬롯 */
+.ecl-slot-full     { color: #c00; font-size: 11px; margin-left: 4px; }
+.ecl-slot-cnt      { color: #888; font-size: 11px; margin-left: 4px; }
+.ecl-slot-lbl-full { color: #aaa; }
+</style>
+
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_body.jsp"%>
-<%@ include file="/WEB-INF/jsp/include/mngr/fnctInfo.jsp"%>
+<%@ include file="/WEB-INF/jsp/k2web/module/enterCldrApply/fnctMngr/fnctInfoTabs.jsp"%>
+
 
 <c:choose>
 <c:when test="${artcl != null}">
 
+<h2>신청 정보</h2>
 <div class="_write _labelW01">
 
     <div class="_form">
         <label class="_label">신청 일자</label>
         <div class="_insert">
-            <input type="date" id="artclDt"
-                value="<fmt:formatDate value='${artcl.artclDt}' pattern='yyyy-MM-dd'/>"
-                style="width:160px;">
+            <input type="hidden" id="artclDt" value="<fmt:formatDate value='${artcl.artclDt}' pattern='yyyy-MM-dd'/>">
+            <fmt:formatDate value='${artcl.artclDt}' pattern='yyyy-MM-dd'/>
         </div>
     </div>
 
@@ -31,10 +69,19 @@
         <label class="_label">시간 선택</label>
         <div class="_insert">
             <c:forEach var="slot" items="${timeSlotList}">
-            <label style="margin-right:14px;">
+            <c:set var="isFull" value="${slot.capacity > 0 && slot.bookedCount >= slot.capacity}"/>
+            <c:set var="isCurrent" value="${artcl.timeSlotSeq == slot.slotSeq}"/>
+            <label class="ecl-slot-lbl${isFull && !isCurrent ? ' ecl-slot-lbl-full' : ''}">
                 <input type="radio" name="timeSlotSelect" value="${slot.slotSeq}"
-                    ${artcl.timeSlotSeq == slot.slotSeq ? 'checked' : ''}>
+                    ${isCurrent ? 'checked' : ''}
+                    ${isFull && !isCurrent ? 'disabled' : ''}>
                 <c:out value="${slot.applyTime}"/>
+                <c:if test="${slot.capacity > 0}">
+                    <c:choose>
+                        <c:when test="${isFull && !isCurrent}"><span class="ecl-slot-full">(마감)</span></c:when>
+                        <c:otherwise><span class="ecl-slot-cnt">(${slot.bookedCount}/${slot.capacity})</span></c:otherwise>
+                    </c:choose>
+                </c:if>
             </label>
             </c:forEach>
         </div>
@@ -42,15 +89,15 @@
     </c:if>
 
     <div class="_form">
-        <label class="_label"><span style="color:#c00;">*</span> 신청자명</label>
+        <label class="_label"><span class="ecl-req">*</span> 신청자명</label>
         <div class="_insert">
-            <input type="text" id="rqstNm" style="width:220px;"
+            <input type="text" id="rqstNm" class="ecl-input-w220"
                 value="<c:out value='${artcl.rqstNm}'/>">
         </div>
     </div>
 
     <div class="_form">
-        <label class="_label"><span style="color:#c00;">*</span> 휴대전화</label>
+        <label class="_label"><span class="ecl-req">*</span> 휴대전화</label>
         <div class="_insert" id="phoneWrap"><%-- JS 렌더링 --%></div>
     </div>
 
@@ -62,7 +109,7 @@
     <div class="_form">
         <label class="_label">고교명</label>
         <div class="_insert">
-            <input type="text" id="schNm" style="width:220px;" readonly
+            <input type="text" id="schNm" class="ecl-input-w220" readonly
                 value="<c:out value='${artcl.schNm}'/>">
             <input type="hidden" id="schCd" value="<c:out value='${artcl.schCd}'/>">
             <input type="hidden" id="schLc" value="<c:out value='${artcl.schLc}'/>">
@@ -80,7 +127,7 @@
     <div class="_form">
         <label class="_label">동반 인원</label>
         <div class="_insert">
-            <input type="number" id="companionCnt" style="width:80px;" min="0" value="${artcl.companionCnt}"> 명
+            <input type="number" id="companionCnt" class="ecl-input-w80" min="0" value="${artcl.companionCnt}"> 명
         </div>
     </div>
     </c:if>
@@ -89,9 +136,9 @@
     <div class="_form">
         <label class="_label">대상별 인원</label>
         <div class="_insert">
-            <table class="_table _list _inner" style="width:60%;">
+            <table class="_table _list _inner ecl-tbl-target">
             	<colgroup>
-                    <col style="width:auto;"><col style="width:350px;">
+                    <col><col class="ecl-col-350">
                 </colgroup>
                 <thead><tr><th>대상</th><th>인원</th></tr></thead>
                 <tbody>
@@ -105,7 +152,7 @@
                 <tr>
                     <td><c:out value="${ti.targetNm}"/></td>
                     <td>
-                        <input type="number" class="target-comp-input" data-seq="${ti.targetItemSeq}" style="width:70px;" min="0" value="${savedCompCnt}">명
+                        <input type="number" class="target-comp-input ecl-input-w70" data-seq="${ti.targetItemSeq}" min="0" value="${savedCompCnt}">명
                     </td>
                 </tr>
                 </c:forEach>
@@ -119,7 +166,7 @@
     <c:forEach var="item" items="${artcl.dynamicFormItems}" varStatus="s">
     <div class="_form">
         <label class="_label">
-            <c:if test="${item.requiredYn == 'Y'}"><span style="color:#c00;">*</span> </c:if>
+            <c:if test="${item.requiredYn == 'Y'}"><span class="ecl-req">*</span> </c:if>
             <c:out value="${item.itemNm}"/>
         </label>
         <div class="_insert">
@@ -128,7 +175,7 @@
                 <c:when test="${item.itemType == 'Radio'}">
                     <c:forEach var="opt" items="${fn:split(item.itemOptions, ',')}">
                     <c:set var="optTrim" value="${fn:trim(opt)}"/>
-                    <label style="margin-right:12px;">
+                    <label class="ecl-opt-lbl">
                         <input type="radio" name="formRadio_${item.formItemSeq}"
                             class="answer-radio" data-dynidx="${s.index + 1}"
                             value="${optTrim}"
@@ -140,7 +187,7 @@
                 <c:when test="${item.itemType == 'Checkbox'}">
                     <c:forEach var="opt" items="${fn:split(item.itemOptions, ',')}">
                     <c:set var="optTrim" value="${fn:trim(opt)}"/>
-                    <label style="margin-right:12px;">
+                    <label class="ecl-opt-lbl">
                         <input type="checkbox" class="answer-chk" data-dynidx="${s.index + 1}"
                             value="${optTrim}"
                             ${fn:contains(item.answerVal, optTrim) ? 'checked' : ''}>
@@ -149,8 +196,7 @@
                     </c:forEach>
                 </c:when>
                 <c:otherwise>
-                    <input type="text" class="answer-text" data-dynidx="${s.index + 1}"
-                        style="width:300px;"
+                    <input type="text" class="answer-text ecl-input-w300" data-dynidx="${s.index + 1}"
                         value="<c:out value='${item.answerVal}'/>">
                 </c:otherwise>
             </c:choose>
@@ -162,26 +208,26 @@
 </div><!-- ._edit -->
 
 <%-- 학교 검색 레이어 --%>
-<div id="schoolSearchLayer" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:6px;width:480px;max-height:70vh;overflow:hidden;display:flex;flex-direction:column;">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #ddd;">
+<div id="schoolSearchLayer" class="ecl-school-layer">
+    <div class="ecl-school-inner">
+        <div class="ecl-school-header">
             <strong>고교 검색</strong>
-            <a href="#none" onclick="jf_closeSchoolSearch();" style="font-size:18px;color:#555;text-decoration:none;">&#10005;</a>
+            <a href="#none" onclick="jf_closeSchoolSearch();" class="ecl-school-close">&#10005;</a>
         </div>
-        <div style="padding:12px 18px;border-bottom:1px solid #eee;display:flex;gap:8px;">
-            <input type="text" id="srchSchNm" style="flex:1;padding:6px;" placeholder="고등학교명을 입력하세요."
+        <div class="ecl-school-search">
+            <input type="text" id="srchSchNm" placeholder="고등학교명을 입력하세요."
                 onkeypress="if(event.keyCode==13) jf_searchSchool();">
             <span class="_button _small _active">
                 <a href="#none" onclick="jf_searchSchool();">검색</a>
             </span>
         </div>
-        <div style="overflow-y:auto;max-height:340px;padding:8px 0;">
-            <ul id="schoolResultList" style="list-style:none;margin:0;padding:0;"></ul>
+        <div class="ecl-school-results">
+            <ul id="schoolResultList"></ul>
         </div>
     </div>
 </div>
 
-<c:url var="viewUrl" value="/enterCldrApply/fnctMngr/${vo.siteId}/${setupSeq}/${artcl.artclSeq}/artclView">
+<c:url var="viewUrl" value="/enterCldrApply/fnctMngr/${vo.siteId}/${setupSeq}/${artcl.artclSeq}/artclView.do">
     <c:param name="page"            value="${vo.page}"/>
     <c:param name="findArtclStatus" value="${vo.findArtclStatus}"/>
     <c:param name="findType"        value="${vo.findType}"/>
@@ -219,11 +265,11 @@ var COMPANION_USE = "${setup.companionUseYn}";
     var raw = "<c:out value='${artcl.rqstTel}'/>";
     var p = raw.split('-');
     $('#phoneWrap').html(
-        '<input type="text" id="phone1" style="width:55px;" maxlength="4" value="' + (p[0]||'010') + '" onkeyup="this.value=this.value.replace(/[^0-9]/g,\'\')">' +
+        '<input type="text" id="phone1" class="ecl-phone1" maxlength="4" value="' + (p[0]||'010') + '" onkeyup="this.value=this.value.replace(/[^0-9]/g,\'\')">' +
         ' - ' +
-        '<input type="text" id="phone2" style="width:70px;" maxlength="4" value="' + (p[1]||'') + '" onkeyup="this.value=this.value.replace(/[^0-9]/g,\'\')">' +
+        '<input type="text" id="phone2" class="ecl-phone-part" maxlength="4" value="' + (p[1]||'') + '" onkeyup="this.value=this.value.replace(/[^0-9]/g,\'\')">' +
         ' - ' +
-        '<input type="text" id="phone3" style="width:70px;" maxlength="4" value="' + (p[2]||'') + '" onkeyup="this.value=this.value.replace(/[^0-9]/g,\'\')">'
+        '<input type="text" id="phone3" class="ecl-phone-part" maxlength="4" value="' + (p[2]||'') + '" onkeyup="this.value=this.value.replace(/[^0-9]/g,\'\')">'
     );
 })();
 
@@ -232,10 +278,10 @@ var COMPANION_USE = "${setup.companionUseYn}";
     var raw = "<c:out value='${artcl.rqstMl}'/>";
     var ep  = raw.split('@');
     $('#emailWrap').html(
-        '<input type="text" id="rqstMl1" style="width:150px;" value="' + (ep[0]||'') + '">' +
+        '<input type="text" id="rqstMl1" class="ecl-email-part" value="' + (ep[0]||'') + '">' +
         ' @ ' +
-        '<input type="text" id="rqstMl2" style="width:150px;" value="' + (ep[1]||'') + '">' +
-        '<select id="emailDomain" onchange="jf_emailDomain(this.value);" style="margin-left:6px;">' +
+        '<input type="text" id="rqstMl2" class="ecl-email-part" value="' + (ep[1]||'') + '">' +
+        '<select id="emailDomain" onchange="jf_emailDomain(this.value);" class="ecl-email-domain">' +
         '<option value="">직접입력</option>' +
         '<option value="naver.com">네이버</option>' +
         '<option value="google.com">Google</option>' +
@@ -273,15 +319,14 @@ function jf_searchSchool() {
 				html += "<ul>";
 				$( list ).each(function() {
 					console.log(this);
-					html += '<li onclick="jf_selectSchool(\'' + esc(this.schNm) + '\',\'' + esc(this.schCd||'') + '\',\'' + esc(this.rgn||'') + '\',\'' + esc(this.ctgr||'') + '\')"' +
-                    ' style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'\'">' +
-                    '<div style="font-weight:bold;">' + esc(this.schNm) + '</div>' +
-                    '<div style="font-size:12px;color:#888;">' + esc(this.schLc||'') + ' / ' + esc(this.rgn||'') + ' / ' + esc(this.ctgr||'') + '</div>' +
+					html += '<li class="ecl-school-item" onclick="jf_selectSchool(\'' + esc(this.schNm) + '\',\'' + esc(this.schCd||'') + '\',\'' + esc(this.rgn||'') + '\',\'' + esc(this.ctgr||'') + '\')">' +
+                    '<div class="ecl-school-item-nm">' + esc(this.schNm) + '</div>' +
+                    '<div class="ecl-school-item-info">' + esc(this.schLc||'') + ' / ' + esc(this.rgn||'') + ' / ' + esc(this.ctgr||'') + '</div>' +
                     '</li>';
 				});
 				html += "</ul>";
 			} else {
-				$('#schoolResultList').html('<li style="padding:10px;color:#999;">검색 결과가 없습니다.</li>');
+				$('#schoolResultList').html('<li class="ecl-school-no-result">검색 결과가 없습니다.</li>');
                 return;
 			}
 			

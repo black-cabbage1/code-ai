@@ -1,8 +1,12 @@
 package k2web.module.enterCldrApply.web;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -20,6 +24,7 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -27,11 +32,16 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import k2web.com.cmm.aop.Layout;
+import k2web.com.cmm.message.service.MessageVo;
+import k2web.com.cmm.tag.TextTag;
+import k2web.com.cmm.tag.UrlTag;
 import k2web.com.cop.fnct.service.FnctService;
 import k2web.com.util.K2Util;
 import k2web.module.enterCldrApply.service.EnterCldrApplyService;
 import k2web.module.enterCldrApply.service.EnterCldrApplyVo;
 import k2web.module.enterCldrApply.service.model.EnterCldrArtcl;
+import k2web.module.enterCldrApply.service.model.EnterCldrAtchmnfl;
+import k2web.module.enterCldrApply.service.model.EnterCldrHoliday;
 import k2web.module.enterCldrApply.service.model.EnterCldrSetup;
 import k2web.module.enterCldrApply.service.model.EnterCldrTimeSlot;
 import k2web.module.enterCldrApply.util.ResponseUtil;
@@ -43,7 +53,6 @@ public class EnterCldrApplyUserController {
     private static final Logger LOG = LoggerFactory.getLogger(EnterCldrApplyUserController.class);
 
     private static final String FNCT_ID = EnterCldrApplyService.FNCT_ID;
-    private static final String JSP_PATH = "fnct/enterCldrApply/enterCldrApply_basic_skin";
 
     @Resource(name = "EnterCldrApplyService")
     private EnterCldrApplyService enterCldrApplyService;
@@ -91,6 +100,79 @@ public class EnterCldrApplyUserController {
     }
 
     /**
+     * 월 단위 날짜별 슬롯 마감 여부 일괄 조회 (Ajax)
+     * 반환: { dateMap: { "yyyy-MM-dd": "full"|"ok" } }
+     */
+    @RequestMapping("/{siteId}/{fnctNo}/slotMonthAvailability")
+    @ResponseBody
+    public void slotMonthAvailability(
+            @PathVariable String siteId,
+            @PathVariable Integer fnctNo,
+            @RequestParam int year,
+            @RequestParam int month,
+            HttpServletResponse response) {
+
+        EnterCldrSetup setup   = enterCldrApplyService.getSetup(fnctNo);
+        List<EnterCldrTimeSlot> slots    = enterCldrApplyService.getTimeSlotList(fnctNo);
+        List<EnterCldrHoliday>  holidays = enterCldrApplyService.getHolidayList(fnctNo);
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+
+        Set<String> holidaySet = new HashSet<>();
+        if (holidays != null) {
+            for (EnterCldrHoliday h : holidays) {
+                if (h.getHolidayDt() != null) holidaySet.add(sdf.format(h.getHolidayDt()));
+            }
+        }
+
+        String[] dayYn = new String[8];
+        if (setup != null) {
+            dayYn[Calendar.SUNDAY]    = setup.getSunYn();
+            dayYn[Calendar.MONDAY]    = setup.getMonYn();
+            dayYn[Calendar.TUESDAY]   = setup.getTueYn();
+            dayYn[Calendar.WEDNESDAY] = setup.getWedYn();
+            dayYn[Calendar.THURSDAY]  = setup.getThuYn();
+            dayYn[Calendar.FRIDAY]    = setup.getFriYn();
+            dayYn[Calendar.SATURDAY]  = setup.getSatYn();
+        }
+
+        String recvStart = (setup != null && setup.getRecvStartDt() != null) ? sdf.format(setup.getRecvStartDt()) : null;
+        String recvEnd   = (setup != null && setup.getRecvEndDt()   != null) ? sdf.format(setup.getRecvEndDt())   : null;
+
+        JsonObject dateMap = new JsonObject();
+        Calendar cal = Calendar.getInstance();
+        cal.set(year, month - 1, 1);
+        int daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
+
+        for (int day = 1; day <= daysInMonth; day++) {
+            cal.set(year, month - 1, day);
+            String dateStr = sdf.format(cal.getTime());
+            int dow = cal.get(Calendar.DAY_OF_WEEK);
+
+            if (recvStart != null && dateStr.compareTo(recvStart) < 0) continue;
+            if (recvEnd   != null && dateStr.compareTo(recvEnd)   > 0) continue;
+            if (dayYn[dow] == null || !"Y".equals(dayYn[dow])) continue;
+            if (holidaySet.contains(dateStr)) continue;
+
+            if (slots == null || slots.isEmpty()) {
+                dateMap.addProperty(dateStr, "full");
+                continue;
+            }
+            boolean allFull = true;
+            for (EnterCldrTimeSlot slot : slots) {
+                if (slot.getCapacity() == 0) { allFull = false; break; }
+                int remain = enterCldrApplyService.getTimeSlotRemainCnt(slot.getSlotSeq(), dateStr);
+                if (remain > 0) { allFull = false; break; }
+            }
+            dateMap.addProperty(dateStr, allFull ? "full" : "ok");
+        }
+
+        JsonObject result = new JsonObject();
+        result.add("dateMap", dateMap);
+        ResponseUtil.setJsonDataToResponse(response, result);
+    }
+
+    /**
      * 캘린더 신청 메인 화면 (캘린더 뷰)
      * 설정 정보, 시간 슬롯, 휴일, 폼 항목을 함께 전달
      */
@@ -114,7 +196,7 @@ public class EnterCldrApplyUserController {
         model.addAttribute("formItemList", enterCldrApplyService.getFormItemList(fnctNo));
         model.addAttribute("targetItemList", enterCldrApplyService.getTargetItemList(fnctNo));
         model.addAttribute("atchmnflList", enterCldrApplyService.getAtchmnflList(fnctNo));
-        return JSP_PATH + "/main";
+        return "skin:main";
     }
 
     /**
@@ -158,13 +240,8 @@ public class EnterCldrApplyUserController {
                                 artcl.getSetupSeq(), artcl.getRqstNm(), artcl.getRqstTel())) {
                     message = "이미 동일한 신청 내역이 존재합니다.";
                 } else {
-                    int remain = enterCldrApplyService.getTimeSlotRemainCnt(
-                        artcl.getTimeSlotSeq(), dateToString(artcl.getArtclDt(), "yyyy-MM-dd"));
-                    if (remain <= 0) {
-                        message = "선택하신 시간대의 정원이 마감되었습니다.";
-                    } else {
-                        enterCldrApplyService.setArtclRegist(artcl);
-                    }
+                    // 슬롯 잠금 + 정원 재확인 + 저장을 원자적으로 처리 (동시 신청 초과 방지)
+                    message = enterCldrApplyService.tryArtclRegist(artcl);
                 }
             }
         } catch (DataAccessException e) {
@@ -188,37 +265,29 @@ public class EnterCldrApplyUserController {
             ModelMap model) {
         K2Util.setFnctInfo(fnctService, siteId, FNCT_ID, model);
         model.addAttribute("setup", enterCldrApplyService.getSetup(fnctNo));
-        return JSP_PATH + "/artclSearch";
+        return "skin:artclSearch";
     }
 
     /**
-     * 신청 조회 결과 (Ajax) - 이름+전화번호 기준, 취소 포함 전체 이력
+     * 신청 조회 결과 목록
      */
-    @RequestMapping("/{siteId}/{fnctNo}/artclSearchProc")
-    @ResponseBody
-    public void artclSearchProc(
+    @RequestMapping("/{siteId}/{fnctNo}/artclSearchList")
+    @Layout
+    public String artclSearchList(
             @PathVariable String siteId,
             @PathVariable Integer fnctNo,
-            @RequestParam String rqstNm,
-            @RequestParam String rqstTel,
-            HttpServletResponse response) {
-        List<EnterCldrArtcl> list = enterCldrApplyService.getArtclListByUser(fnctNo, rqstNm, rqstTel);
-        JsonArray arr = new JsonArray();
-        if (list != null) {
-            for (EnterCldrArtcl a : list) {
-                JsonObject obj = new JsonObject();
-                obj.addProperty("artclSeq",     a.getArtclSeq());
-                obj.addProperty("artclDt",      dateToString(a.getArtclDt(), "yyyy-MM-dd"));
-                obj.addProperty("applyTime",    a.getApplyTime() != null ? a.getApplyTime() : "");
-                obj.addProperty("companionCnt", a.getCompanionCnt() != null ? a.getCompanionCnt() : 0);
-                obj.addProperty("rgsde",        dateToString(a.getRgsde(), "yyyy-MM-dd'T'HH:mm"));
-                obj.addProperty("artclStatus",  a.getArtclStatus() != null ? a.getArtclStatus() : "");
-                arr.add(obj);
-            }
+            @RequestParam(required = false) String rqstNm,
+            @RequestParam(required = false) String rqstTel,
+            @ModelAttribute("vo") EnterCldrApplyVo vo,
+            ModelMap model) {
+        K2Util.setFnctInfo(fnctService, siteId, FNCT_ID, model);
+        model.addAttribute("setup", enterCldrApplyService.getSetup(fnctNo));
+        model.addAttribute("rqstNm", rqstNm);
+        if (rqstNm != null && !rqstNm.trim().isEmpty()
+                && rqstTel != null && !rqstTel.trim().isEmpty()) {
+            model.addAttribute("artclList", enterCldrApplyService.getArtclListByUser(fnctNo, rqstNm, rqstTel));
         }
-        JsonObject jsonObj = new JsonObject();
-        jsonObj.add("artclList", arr);
-        ResponseUtil.setJsonDataToResponse(response, jsonObj);
+        return "skin:artclSearchList";
     }
 
     /**
@@ -232,10 +301,35 @@ public class EnterCldrApplyUserController {
             @PathVariable Integer artclSeq,
             @ModelAttribute("vo") EnterCldrApplyVo vo,
             ModelMap model) {
-        K2Util.setFnctInfo(fnctService, siteId, FNCT_ID, model);
-        model.addAttribute("setup", enterCldrApplyService.getSetup(fnctNo));
-        model.addAttribute("artcl", enterCldrApplyService.getArtcl(fnctNo, artclSeq));
-        return JSP_PATH + "/artclView";
+        
+    	EnterCldrSetup setup = enterCldrApplyService.getSetup(fnctNo);
+    	if(setup == null) {
+    		MessageVo messageVo = new MessageVo();
+    		messageVo.setMessage( TextTag.getText( request, "정상적인 접근이 아닙니다.", null, "" ) ); 
+    		messageVo.setLocation( UrlTag.getValue( request, "/enterCldrApply/" + siteId + "/" + fnctNo + "/main" ) );
+    		
+    		return "message:";
+    	}
+		
+    	EnterCldrArtcl artcl = enterCldrApplyService.getArtcl(fnctNo, artclSeq);
+    	if(artcl == null) {
+    		MessageVo messageVo = new MessageVo();
+    		messageVo.setMessage( TextTag.getText( request, "신청 정보를 찾을 수 없습니다.", null, "" ) ); 
+    		messageVo.setLocation( UrlTag.getValue( request, "/enterCldrApply/" + siteId + "/" + fnctNo + "/artclSearch" ) );
+    		
+    		return "message:";
+    	}
+    	
+        Date now = new Date();
+        boolean canModify = true;
+        if (setup.getModStartDt() != null && now.before(setup.getModStartDt())) canModify = false;
+        if (setup.getModEndDt() != null   && now.after(setup.getModEndDt()))   canModify = false;
+        
+        model.addAttribute("setup", setup);
+        model.addAttribute("artcl", artcl);
+        model.addAttribute("canModify", canModify);
+
+        return "skin:artclView";
     }
 
     /**
@@ -251,20 +345,41 @@ public class EnterCldrApplyUserController {
             ModelMap model) {
         K2Util.setFnctInfo(fnctService, siteId, FNCT_ID, model);
         EnterCldrSetup setup = enterCldrApplyService.getSetup(fnctNo);
-        if (setup == null) return "redirect:/error";
+        
+        if (setup == null) {
+        	MessageVo messageVo = new MessageVo();
+    		messageVo.setMessage( TextTag.getText( request, "정상적인 접근이 아닙니다.", null, "" ) ); 
+    		messageVo.setLocation( UrlTag.getValue( request, "/enterCldrApply/" + siteId + "/" + fnctNo + "/main" ) );
+    		
+    		return "message:";
+        }
 
         Date now = new Date();
         boolean canModify = true;
         if (setup.getModStartDt() != null && now.before(setup.getModStartDt())) canModify = false;
         if (setup.getModEndDt() != null   && now.after(setup.getModEndDt()))   canModify = false;
 
+        EnterCldrArtcl artcl = enterCldrApplyService.getArtcl(fnctNo, artclSeq);
+        if(artcl == null) {
+    		MessageVo messageVo = new MessageVo();
+    		messageVo.setMessage( TextTag.getText( request, "신청 정보를 찾을 수 없습니다.", null, "" ) ); 
+    		messageVo.setLocation( UrlTag.getValue( request, "/enterCldrApply/" + siteId + "/" + fnctNo + "/artclSearch" ) );
+    		
+    		return "message:";
+    	}
+        
+        String artclDtStr = "";
+        if (artcl != null && artcl.getArtclDt() != null) {
+            artclDtStr = new java.text.SimpleDateFormat("yyyy-MM-dd").format(artcl.getArtclDt());
+        }
         model.addAttribute("setup",          setup);
-        model.addAttribute("artcl",          enterCldrApplyService.getArtcl(fnctNo, artclSeq));
+        model.addAttribute("artcl",          artcl);
         model.addAttribute("canModify",      canModify);
-        model.addAttribute("timeSlotList",   enterCldrApplyService.getTimeSlotList(fnctNo));
+        model.addAttribute("timeSlotList",   enterCldrApplyService.getTimeSlotListForEdit(fnctNo, artclSeq, artclDtStr));
         model.addAttribute("targetItemList", enterCldrApplyService.getTargetItemList(fnctNo));
         model.addAttribute("formItemList",   enterCldrApplyService.getFormItemList(fnctNo));
-        return JSP_PATH + "/artclUpdt";
+        
+        return "skin:artclUpdtView";
     }
 
     /**
@@ -288,7 +403,7 @@ public class EnterCldrApplyUserController {
                 } else if (setup.getModEndDt() != null && now.after(setup.getModEndDt())) {
                     message = "수정 가능 기간이 마감되었습니다. 관리자에게 문의바랍니다.";
                 } else {
-                    enterCldrApplyService.setArtclUpdt(artcl, null);
+                    enterCldrApplyService.setArtclUpdt(artcl, false);
                 }
             }
         } catch (DataAccessException e) {
@@ -332,7 +447,7 @@ public class EnterCldrApplyUserController {
                     }
                 }
                 if (message == null) {
-                    enterCldrApplyService.setArtclStatusUpdt(fnctNo, seq, "CANCELED", null);
+                    enterCldrApplyService.setArtclStatusUpdt(fnctNo, seq, "CANCELED", false);
                 }
             }
         } catch (DataAccessException e) {
@@ -345,6 +460,61 @@ public class EnterCldrApplyUserController {
     }
 
     
+    /**
+     * 첨부파일 다운로드 — 웹 취약점 방지를 위해 POST 전용
+     */
+    @RequestMapping(value = "/{siteId}/{atchmnflSeq}/fileDown", method = RequestMethod.POST)
+    public void fileDown(
+            @PathVariable String siteId,
+            @PathVariable Integer atchmnflSeq,
+            HttpServletResponse response) {
+
+        EnterCldrAtchmnfl file = enterCldrApplyService.getAtchmnfl(atchmnflSeq);
+        if (file == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
+        File baseDir = new File(file.getFilePath());
+        File f = new File(baseDir, file.getChangeNm());
+        try {
+            if (!f.getCanonicalPath().startsWith(baseDir.getCanonicalPath() + File.separator)) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                return;
+            }
+        } catch (java.io.IOException e) {
+            LOG.error("파일 경로 검증 오류", e);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            return;
+        }
+        if (!f.exists() || !f.isFile()) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
+        java.io.FileInputStream in = null;
+        try {
+            String encodedNm = java.net.URLEncoder.encode(file.getOrginlNm(), "UTF-8").replace("+", "%20");
+            response.setContentType("application/octet-stream");
+            response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + encodedNm + "\"; filename*=UTF-8''" + encodedNm);
+            response.setContentLengthLong(f.length());
+
+            in = new java.io.FileInputStream(f);
+            java.io.OutputStream out = response.getOutputStream();
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = in.read(buf)) != -1) {
+                out.write(buf, 0, len);
+            }
+            out.flush();
+        } catch (java.io.IOException e) {
+            LOG.error("파일 다운로드 오류", e);
+        } finally {
+            if (in != null) { try { in.close(); } catch (java.io.IOException ignored) {} }
+        }
+    }
+
     private static String dateToString(Date date, String pattern) {
         if (date == null || pattern == null || pattern.isEmpty()) return "";
         return new SimpleDateFormat(pattern).format(date);

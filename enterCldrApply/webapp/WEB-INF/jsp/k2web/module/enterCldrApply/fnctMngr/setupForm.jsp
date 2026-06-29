@@ -9,6 +9,36 @@
 
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_header.jsp"%>
 
+<script type="text/javascript" src="/CrossEditor/js/namo_scripteditor.js"></script>
+
+<style>
+/* 설정 폼 공통 */
+.ecl-hidden         { display: none; }
+.ecl-nowrap         { white-space: nowrap; }
+.ecl-hint           { color: #888; }
+.ecl-input-full     { width: 100%; }
+.ecl-input-date     { width: 120px; }
+.ecl-input-date-hol { width: 130px; }
+.ecl-input-w45      { width: 45px; }
+.ecl-input-w50      { width: 50px; }
+.ecl-input-w55      { width: 55px; }
+.ecl-input-w80      { width: 80px; }
+.ecl-input-w100     { width: 100px; }
+.ecl-input-w150     { width: 150px; }
+.ecl-sel-type       { width: 95px; }
+.ecl-col-100        { width: 100px; }
+.ecl-col-110        { width: 110px; }
+.ecl-col-155        { width: 155px; }
+.ecl-col-160        { width: 160px; }
+.ecl-col-180        { width: 180px; }
+.ecl-target-section { margin-top: 12px; }
+.ecl-fixed-badge    { color: #888; font-size: 11px; margin-left: 4px; }
+.ecl-no-delete      { color: #aaa; font-size: 12px; }
+.ecl-file-list      { margin-bottom: 8px; padding: 0; list-style: none; }
+.ecl-file-list li   { margin-bottom: 4px; }
+.ecl-section-h2     { padding-top: 20px; margin-bottom: 10px; }
+</style>
+
 <script>
 /* ===================================================
    공통 상수
@@ -18,8 +48,8 @@ var SETUP_SEQ = "${setup.setupSeq}";
 var DAY_FIELDS = ['monYn','tueYn','wedYn','thuYn','friYn','satYn','sunYn'];
 
 /* ===================================================
-   탭 전환 – sessionStorage로 현재 탭 유지
 =================================================== */
+var klang = klang();
 $(function() {
     /* datepicker 공통 적용 */
     $(".jf-datepicker").datepicker({
@@ -31,6 +61,22 @@ $(function() {
         monthNames    : ['1','2','3','4','5','6','7','8','9','10','11','12'],
         monthNamesShort:['1','2','3','4','5','6','7','8','9','10','11','12']
     });
+    /* 에디터 적용 */
+    if($("#EDITOR_AREA_CONTAINER").length > 0){
+		var editorLang = "enu";
+		if(klang == "ja"){
+			editorLang = "jpn";
+		}else if(klang == "zh"){
+			editorLang = "chs";
+		}else if(klang == "ko"){
+			editorLang = "kor";
+		}
+		CrossEditor = new NamoSE('editor');
+		CrossEditor.params.ParentEditor = $("#EDITOR_AREA_CONTAINER").get(0);
+		CrossEditor.params.UserLang = editorLang;
+		CrossEditor.params.Height = "450px";
+		CrossEditor.EditorStart();
+	}
 
     /* 탭 복원 */
     var savedTab = sessionStorage.getItem("enterCldrApply_tab_" + SETUP_SEQ) || "tabSetup";
@@ -59,18 +105,29 @@ function jf_reloadTab(tabId) {
 function jf_setupSave() {
     /* 필수값 검증 */
     var setupNm    = $("input[name='setupNm']").val().trim();
+    var evtStart   = $("input[name='evtStartDt']").val().trim();
+    var evtEnd     = $("input[name='evtEndDt']").val().trim();
     var recvStart  = $("input[name='recvStartDt']").val().trim();
     var recvEnd    = $("input[name='recvEndDt']").val().trim();
     var modStart   = $("input[name='modStartDt']").val().trim();
+    var modStartH  = $("select[name='modStartHour']").val();
     var modEnd     = $("input[name='modEndDt']").val().trim();
+    var modEndH    = $("select[name='modEndHour']").val();
 
-    if (!setupNm)   { alert("설정명을 입력하세요.", function(){$("input[name='setupNm']").focus();}); return;}
-    if (!recvStart) { alert("접수 기간의 시작일을 선택하세요.", function(){$("input[name='recvStartDt']").focus();});  return; }
-    if (!recvEnd)   { alert("접수 기간의 종료일을 선택하세요.", function(){$("input[name='recvEndDt']").focus();});  return; }
-    if (recvStart > recvEnd) { alert("접수 기간의 시작일이 종료일보다 늦을 수 없습니다.", function(){$("input[name='recvStartDt']").focus();}); return; }
+    if (!setupNm)  { alert("설정명을 입력하세요.", function(){$("input[name='setupNm']").focus();}); return; }
+    if (!evtStart) { alert("행사 기간의 시작일을 선택하세요.", function(){$("input[name='evtStartDt']").focus();}); return; }
+    if (!evtEnd)   { alert("행사 기간의 종료일을 선택하세요.", function(){$("input[name='evtEndDt']").focus();}); return; }
+    if (evtStart > evtEnd) { alert("행사 기간의 시작일이 종료일보다 늦을 수 없습니다.", function(){$("input[name='evtStartDt']").focus();}); return; }
+    if (!recvStart) { alert("접수 가능 기간의 시작일을 선택하세요.", function(){$("input[name='recvStartDt']").focus();});  return; }
+    if (!recvEnd)   { alert("접수 가능 기간의 종료일을 선택하세요.", function(){$("input[name='recvEndDt']").focus();});  return; }
+    var recvStartFull = recvStart + ' ' + ($("select[name='recvStartHour']").val() || '0');
+    var recvEndFull   = recvEnd   + ' ' + ($("select[name='recvEndHour']").val()   || '0');
+    if (recvStartFull > recvEndFull) { alert("접수 가능 기간의 시작이 종료보다 늦을 수 없습니다.", function(){$("input[name='recvStartDt']").focus();}); return; }
     if (!modStart)  { alert("수정 가능 기간의 시작일을 선택하세요.", function(){$("input[name='modStartDt']").focus();}); return; }
     if (!modEnd)    { alert("수정 가능 기간의 종료일을 선택하세요.", function(){$("input[name='modEndDt']").focus();}); return; }
-    if (modStart > modEnd)   { alert("수정 가능 기간의 시작일이 종료일보다 늦을 수 없습니다.", function(){$("input[name='modStartDt']").focus();}); return; }
+    var modStartFull = modStart + ' ' + (modStartH || '0');
+    var modEndFull   = modEnd   + ' ' + (modEndH   || '0');
+    if (modStartFull > modEndFull) { alert("수정 가능 기간의 시작이 종료보다 늦을 수 없습니다.", function(){$("input[name='modStartDt']").focus();}); return; }
 
     var url = kurl("/enterCldrApply/fnctMngr/" + SITE_ID + "/<c:choose><c:when test='${isEdit}'>setupUpdtProc</c:when><c:otherwise>setupRegistProc</c:otherwise></c:choose>");
 
@@ -79,7 +136,11 @@ function jf_setupSave() {
     $.each(DAY_FIELDS, function(i, name) {
         if ($.inArray(name, names) === -1) data.push({ name: name, value: 'N' });
     });
-
+	
+    //에디터 내용
+    var strHTMLCode = CrossEditor.GetBodyValue();
+	$( "#content" ).val( strHTMLCode );
+	
     $.ajax({
         url: url, type: "POST", data: data,
         success: function(r) {
@@ -95,6 +156,12 @@ function jf_setupSave() {
         }
     });
 }
+
+<c:if test='${isEdit}'>
+function OnInitCompleted(){
+	CrossEditor.SetBodyValue($("#content").val());
+}
+</c:if>
 
 /* ===================================================
    시간 슬롯
@@ -434,25 +501,62 @@ function jf_atchmnflDelete(seq, trElem) {
             </div>
         </div>
 		
-		<div class="_form">
-            <label class="_label"><mark class="must">*</mark>접수 기간</label>
+        <div class="_form">
+            <label class="_label"><mark class="must">*</mark>행사 기간</label>
             <div class="_insert">
-                <input type="text" name="recvStartDt" class="jf-datepicker" style="width:120px;"
-                    value="<fmt:formatDate value='${setup.recvStartDt}' pattern='yyyy-MM-dd'/>">
+                <input type="text" name="evtStartDt" class="jf-datepicker ecl-input-date"
+                    value="<fmt:formatDate value='${setup.evtStartDt}' pattern='yyyy-MM-dd'/>">
                 ~
-                <input type="text" name="recvEndDt" class="jf-datepicker" style="width:120px;"
-                    value="<fmt:formatDate value='${setup.recvEndDt}' pattern='yyyy-MM-dd'/>">
+                <input type="text" name="evtEndDt" class="jf-datepicker ecl-input-date"
+                    value="<fmt:formatDate value='${setup.evtEndDt}' pattern='yyyy-MM-dd'/>">
             </div>
+            <div class="_insert _comment">달력 표시 기간 기준.</div>
+        </div>
+
+        <div class="_form">
+            <label class="_label"><mark class="must">*</mark>접수 가능 기간</label>
+            <div class="_insert">
+                <fmt:formatDate var="recvStartHourVal" value="${setup.recvStartDt}" pattern="H"/>
+                <input type="text" name="recvStartDt" class="jf-datepicker ecl-input-date"
+                    value="<fmt:formatDate value='${setup.recvStartDt}' pattern='yyyy-MM-dd'/>">
+                <select name="recvStartHour" class="ecl-input-w55" style="margin-left:4px;">
+                    <c:forEach var="h" begin="0" end="23">
+                        <option value="${h}" ${recvStartHourVal == h ? 'selected' : ''}><c:if test="${h < 10}">0</c:if>${h}:00</option>
+                    </c:forEach>
+                </select>
+                &nbsp;~&nbsp;
+                <fmt:formatDate var="recvEndHourVal" value="${setup.recvEndDt}" pattern="H"/>
+                <input type="text" name="recvEndDt" class="jf-datepicker ecl-input-date"
+                    value="<fmt:formatDate value='${setup.recvEndDt}' pattern='yyyy-MM-dd'/>">
+                <select name="recvEndHour" class="ecl-input-w55" style="margin-left:4px;">
+                    <c:forEach var="h" begin="0" end="23">
+                        <option value="${h}" ${recvEndHourVal == h ? 'selected' : ''}><c:if test="${h < 10}">0</c:if>${h}:00</option>
+                    </c:forEach>
+                </select>
+            </div>
+            <div class="_insert _comment">이 기간(시각) 외 신청 시 "접수기간이 아닙니다." 안내.</div>
         </div>
 
         <div class="_form">
             <label class="_label"><mark class="must">*</mark>수정 가능 기간</label>
             <div class="_insert">
-                <input type="text" name="modStartDt" class="jf-datepicker" style="width:120px;"
+                <fmt:formatDate var="modStartHourVal" value="${setup.modStartDt}" pattern="H"/>
+                <input type="text" name="modStartDt" class="jf-datepicker ecl-input-date"
                     value="<fmt:formatDate value='${setup.modStartDt}' pattern='yyyy-MM-dd'/>">
-                ~
-                <input type="text" name="modEndDt" class="jf-datepicker" style="width:120px;"
+                <select name="modStartHour" class="ecl-input-w55" style="margin-left:4px;">
+                    <c:forEach var="h" begin="0" end="23">
+                        <option value="${h}" ${modStartHourVal == h ? 'selected' : ''}><c:if test="${h < 10}">0</c:if>${h}:00</option>
+                    </c:forEach>
+                </select>
+                &nbsp;~&nbsp;
+                <fmt:formatDate var="modEndHourVal" value="${setup.modEndDt}" pattern="H"/>
+                <input type="text" name="modEndDt" class="jf-datepicker ecl-input-date"
                     value="<fmt:formatDate value='${setup.modEndDt}' pattern='yyyy-MM-dd'/>">
+                <select name="modEndHour" class="ecl-input-w55" style="margin-left:4px;">
+                    <c:forEach var="h" begin="0" end="23">
+                        <option value="${h}" ${modEndHourVal == h ? 'selected' : ''}><c:if test="${h < 10}">0</c:if>${h}:00</option>
+                    </c:forEach>
+                </select>
             </div>
         </div>
         
@@ -484,10 +588,10 @@ function jf_atchmnflDelete(seq, trElem) {
                 <label><input type="radio" name="targetCompUseYn" value="N" ${setup.targetCompUseYn != 'Y' ? 'checked' : ''}> 미사용</label>
 
                 <c:if test="${isEdit}">
-                <div id="targetItemSection" style="display:none; margin-top:12px;">
+                <div id="targetItemSection" class="ecl-hidden ecl-target-section">
                     <table id="tblTarget" class="_table _list">
                         <colgroup>
-                            <col style="width:100px;"><col style="width:auto;"><col style="width:155px;">
+                            <col class="ecl-col-100"><col><col class="ecl-col-155">
                         </colgroup>
                         <thead>
                             <tr><th>순서</th><th>항목명</th><th>관리</th></tr>
@@ -504,9 +608,9 @@ function jf_atchmnflDelete(seq, trElem) {
                                                 <span class="_button _small"><a href="#none" onclick="jf_targetItemDelete('${item.targetItemSeq}');">삭제</a></span>
                                             </td>
                                         </tr>
-                                        <tr id="editTarget_${item.targetItemSeq}" class="edit-row" style="display:none;">
-                                            <td><input type="text" id="editTargetSort_${item.targetItemSeq}" value="${item.sortNo}" style="width:45px;"></td>
-                                            <td><input type="text" id="editTargetNm_${item.targetItemSeq}" value="<c:out value='${item.targetNm}'/>" style="width:100%;"></td>
+                                        <tr id="editTarget_${item.targetItemSeq}" class="edit-row ecl-hidden">
+                                            <td><input type="text" id="editTargetSort_${item.targetItemSeq}" value="${item.sortNo}" class="ecl-input-w45"></td>
+                                            <td><input type="text" id="editTargetNm_${item.targetItemSeq}" value="<c:out value='${item.targetNm}'/>" class="ecl-input-full"></td>
                                             <td>
                                                 <span class="_button _small _active"><a href="#none" onclick="jf_targetItemUpdt('${item.targetItemSeq}');">저장</a></span>
                                                 <span class="_button _small"><a href="#none" onclick="jf_targetItemEditCancel('${item.targetItemSeq}');">취소</a></span>
@@ -519,7 +623,7 @@ function jf_atchmnflDelete(seq, trElem) {
                                 </c:otherwise>
                             </c:choose>
                             <tr class="_addRow">
-                                <td><input type="text" id="newTargetSort" style="width:45px;" placeholder="순서"></td>
+                                <td><input type="text" id="newTargetSort" class="ecl-input-w45" placeholder="순서"></td>
                                 <td><input type="text" id="newTargetNm"   class="_full" placeholder="항목명 (예: 학부모, 1학년, 2학년)"></td>
                                 <td><span class="_button _small _active"><a href="#none" onclick="jf_targetItemRegist();">추가</a></span></td>
                             </tr>
@@ -549,7 +653,7 @@ function jf_atchmnflDelete(seq, trElem) {
                     <c:when test="${isEdit}">
                     <table id="tblTimeSlot" class="_table _list">
                         <colgroup>
-                            <col style="width:100px;"><col style="width:180px;"><col style="width:auto;"><col style="width:155px;">
+                            <col class="ecl-col-100"><col class="ecl-col-180"><col><col class="ecl-col-155">
                         </colgroup>
                         <thead>
                             <tr><th>순서</th><th>신청 시간</th><th>접수 건수</th><th>관리</th></tr>
@@ -572,10 +676,10 @@ function jf_atchmnflDelete(seq, trElem) {
                                                 <span class="_button _small"><a href="#none" onclick="jf_timeSlotDelete('${slot.slotSeq}');">삭제</a></span>
                                             </td>
                                         </tr>
-                                        <tr id="editSlot_${slot.slotSeq}" class="edit-row" style="display:none;">
-                                            <td><input type="text" id="editSlotSort_${slot.slotSeq}" value="${slot.sortNo}" style="width:55px;"></td>
-                                            <td><input type="text" id="editSlotTime_${slot.slotSeq}" value="${slot.applyTime}" style="width:100px;"></td>
-                                            <td><input type="number" id="editSlotCapacity_${slot.slotSeq}" value="${slot.capacity}" min="0" style="width:80px;"></td>
+                                        <tr id="editSlot_${slot.slotSeq}" class="edit-row ecl-hidden">
+                                            <td><input type="text" id="editSlotSort_${slot.slotSeq}" value="${slot.sortNo}" class="ecl-input-w55"></td>
+                                            <td><input type="text" id="editSlotTime_${slot.slotSeq}" value="${slot.applyTime}" class="ecl-input-w100"></td>
+                                            <td><input type="number" id="editSlotCapacity_${slot.slotSeq}" value="${slot.capacity}" min="0" class="ecl-input-w80"></td>
                                             <td>
                                                 <span class="_button _small _active"><a href="#none" onclick="jf_timeSlotUpdt('${slot.slotSeq}');">저장</a></span>
                                                 <span class="_button _small"><a href="#none" onclick="jf_timeSlotEditCancel('${slot.slotSeq}');">취소</a></span>
@@ -588,16 +692,16 @@ function jf_atchmnflDelete(seq, trElem) {
                                 </c:otherwise>
                             </c:choose>
                             <tr class="_addRow">
-                                <td><input type="text" id="newSlotSort" style="width:55px;" placeholder="순서"></td>
-                                <td><input type="text" id="newSlotTime" style="width:100px;" placeholder="HH:MM"></td>
-                                <td><input type="number" id="newSlotLimit" style="width:80px;" min="0" placeholder="0=무제한"></td>
+                                <td><input type="text" id="newSlotSort" class="ecl-input-w55" placeholder="순서"></td>
+                                <td><input type="text" id="newSlotTime" class="ecl-input-w100" placeholder="HH:MM"></td>
+                                <td><input type="number" id="newSlotLimit" class="ecl-input-w80" min="0" placeholder="0=무제한"></td>
                                 <td><span class="_button _small _active"><a href="#none" onclick="jf_timeSlotRegist();">추가</a></span></td>
                             </tr>
                         </tbody>
                     </table>
                     </c:when>
                     <c:otherwise>
-                        <span style="color:#888;">설정 등록 후 추가할 수 있습니다.</span>
+                        <span class="ecl-hint">설정 등록 후 추가할 수 있습니다.</span>
                     </c:otherwise>
                 </c:choose>
             </div>
@@ -610,12 +714,12 @@ function jf_atchmnflDelete(seq, trElem) {
                     <c:when test="${isEdit}">
                     <table id="tblFormItem" class="_table _list">
                         <colgroup>
-                            <col style="width:100px;">
-                            <col style="width:auto;">
-                            <col style="width:110px;">
-                            <col style="width:100px;">
-                            <col style="width:auto;">
-                            <col style="width:155px;">
+                            <col class="ecl-col-100">
+                            <col>
+                            <col class="ecl-col-110">
+                            <col class="ecl-col-100">
+                            <col>
+                            <col class="ecl-col-155">
                         </colgroup>
                         <thead>
                             <tr><th>순서</th><th>항목명</th><th>유형</th><th>필수여부</th><th>내용</th><th>관리</th></tr>
@@ -629,7 +733,7 @@ function jf_atchmnflDelete(seq, trElem) {
                                             <td><c:out value="${item.sortNo}"/></td>
                                             <td>
                                                 <c:out value="${item.itemNm}"/>
-                                                <c:if test="${item.fixedYn == 'Y'}"><span style="color:#888;font-size:11px;margin-left:4px;">[고정]</span></c:if>
+                                                <c:if test="${item.fixedYn == 'Y'}"><span class="ecl-fixed-badge">[고정]</span></c:if>
                                             </td>
                                             <td><c:out value="${item.itemType}"/></td>
                                             <td>${item.requiredYn == 'Y' ? '필수' : '선택'}</td>
@@ -640,29 +744,44 @@ function jf_atchmnflDelete(seq, trElem) {
                                                     <span class="_button _small"><a href="#none" onclick="jf_formItemDelete('${item.formItemSeq}');">삭제</a></span>
                                                 </c:if>
                                                 <c:if test="${isLocked}">
-                                                    <span style="color:#aaa;font-size:12px;">삭제불가</span>
+                                                    <span class="ecl-no-delete">삭제불가</span>
                                                 </c:if>
                                             </td>
                                         </tr>
                                         <c:if test="${!isLocked}">
-                                        <tr id="editForm_${item.formItemSeq}" class="edit-row" style="display:none;">
-                                            <td><input type="text" id="editFormSort_${item.formItemSeq}" value="${item.sortNo}" style="width:50px;"></td>
-                                            <td><input type="text" id="editFormNm_${item.formItemSeq}" value="<c:out value='${item.itemNm}'/>" style="width:100%;"></td>
+                                        <tr id="editForm_${item.formItemSeq}" class="edit-row ecl-hidden">
+                                            <td><input type="text" id="editFormSort_${item.formItemSeq}" value="${item.sortNo}" class="ecl-input-w50"></td>
+                                            <td><input type="text" id="editFormNm_${item.formItemSeq}" value="<c:out value='${item.itemNm}'/>" class="ecl-input-full"></td>
                                             <td>
-                                                <select id="editFormType_${item.formItemSeq}" style="width:95px;">
-                                                    <option value="TEXT"     ${item.itemType == 'TEXT'     ? 'selected' : ''}>텍스트</option>
-                                                    <option value="Phone"    ${item.itemType == 'Phone'    ? 'selected' : ''}>전화번호</option>
-                                                    <option value="Email"    ${item.itemType == 'Email'    ? 'selected' : ''}>이메일</option>
-                                                    <option value="Radio"    ${item.itemType == 'Radio'    ? 'selected' : ''}>라디오</option>
-                                                    <option value="Checkbox" ${item.itemType == 'Checkbox' ? 'selected' : ''}>체크박스</option>
-                                                    <option value="School"   ${item.itemType == 'School'   ? 'selected' : ''}>학교검색</option>
-                                                </select>
+                                                <c:choose>
+                                                    <c:when test="${item.fixedYn == 'Y'}">
+                                                        <c:choose>
+                                                            <c:when test="${item.itemType == 'RQST_NM'}">이름</c:when>
+                                                            <c:when test="${item.itemType == 'RQST_TEL'}">전화번호</c:when>
+                                                            <c:when test="${item.itemType == 'RQST_ML'}">이메일</c:when>
+                                                            <c:when test="${item.itemType == 'SCHOOL'}">고교검색</c:when>
+                                                            <c:otherwise><c:out value="${item.itemType}"/></c:otherwise>
+                                                        </c:choose>
+                                                        <span style="color:#999; font-size:11px;">(고정)</span>
+                                                        <input type="hidden" id="editFormType_${item.formItemSeq}" value="${item.itemType}">
+                                                    </c:when>
+                                                    <c:otherwise>
+                                                        <select id="editFormType_${item.formItemSeq}" class="ecl-sel-type">
+                                                            <option value="TEXT"     ${item.itemType == 'TEXT'     ? 'selected' : ''}>텍스트</option>
+                                                            <option value="Phone"    ${item.itemType == 'Phone'    ? 'selected' : ''}>전화번호</option>
+                                                            <option value="Email"    ${item.itemType == 'Email'    ? 'selected' : ''}>이메일</option>
+                                                            <option value="Radio"    ${item.itemType == 'Radio'    ? 'selected' : ''}>라디오</option>
+                                                            <option value="Checkbox" ${item.itemType == 'Checkbox' ? 'selected' : ''}>체크박스</option>
+                                                            <option value="School"   ${item.itemType == 'School'   ? 'selected' : ''}>학교검색</option>
+                                                        </select>
+                                                    </c:otherwise>
+                                                </c:choose>
                                             </td>
-                                            <td style="white-space:nowrap;">
+                                            <td class="ecl-nowrap">
                                                 <label><input type="radio" name="editFormReq_${item.formItemSeq}" value="Y" ${item.requiredYn == 'Y' ? 'checked' : ''}> 필수</label>
                                                 <label><input type="radio" name="editFormReq_${item.formItemSeq}" value="N" ${item.requiredYn != 'Y' ? 'checked' : ''}> 선택</label>
                                             </td>
-                                            <td><input type="text" id="editFormOptions_${item.formItemSeq}" value="<c:out value='${item.itemOptions}'/>" style="width:100%;"></td>
+                                            <td><input type="text" id="editFormOptions_${item.formItemSeq}" value="<c:out value='${item.itemOptions}'/>" class="ecl-input-full"></td>
                                             <td>
                                                 <span class="_button _small _active"><a href="#none" onclick="jf_formItemUpdt('${item.formItemSeq}');">저장</a></span>
                                                 <span class="_button _small"><a href="#none" onclick="jf_formItemEditCancel('${item.formItemSeq}');">취소</a></span>
@@ -676,10 +795,10 @@ function jf_atchmnflDelete(seq, trElem) {
                                 </c:otherwise>
                             </c:choose>
                             <tr class="_addRow">
-                                <td><input type="text" id="newFormItemSort" style="width:50px;" placeholder="순서"></td>
-                                <td><input type="text" id="newFormItemNm" style="width:150px;" placeholder="항목명"></td>
+                                <td><input type="text" id="newFormItemSort" class="ecl-input-w50" placeholder="순서"></td>
+                                <td><input type="text" id="newFormItemNm" class="ecl-input-w150" placeholder="항목명"></td>
                                 <td>
-                                    <select id="newFormItemType" style="width:95px;">
+                                    <select id="newFormItemType" class="ecl-sel-type">
                                         <option value="TEXT">텍스트</option>
                                         <option value="Phone">전화번호</option>
                                         <option value="Email">이메일</option>
@@ -688,7 +807,7 @@ function jf_atchmnflDelete(seq, trElem) {
                                         <option value="School">학교검색</option>
                                     </select>
                                 </td>
-                                <td style="white-space:nowrap;">
+                                <td class="ecl-nowrap">
                                     <label><input type="radio" name="newFormRequiredYn" value="Y"> 필수</label>
                                     <label><input type="radio" name="newFormRequiredYn" value="N" checked> 선택</label>
                                 </td>
@@ -699,7 +818,7 @@ function jf_atchmnflDelete(seq, trElem) {
                     </table>
                     </c:when>
                     <c:otherwise>
-                        <span style="color:#888;">설정 등록 후 추가할 수 있습니다.</span>
+                        <span class="ecl-hint">설정 등록 후 추가할 수 있습니다.</span>
                     </c:otherwise>
                 </c:choose>
             </div>
@@ -729,7 +848,8 @@ function jf_atchmnflDelete(seq, trElem) {
         <div class="_form">
             <label class="_label">내용</label>
             <div class="_insert">
-                <textarea name="content" class="_editor"><c:out value="${setup.content}"/></textarea>
+            	<div id="EDITOR_AREA_CONTAINER"></div>
+				<textarea class="hidden" id="content" name="content">${fn:replace(setup.content, cn, "<br>")}</textarea>
             </div>
         </div>
 
@@ -738,9 +858,9 @@ function jf_atchmnflDelete(seq, trElem) {
             <label class="_label">첨부파일</label>
             <div class="_insert">
                 <c:if test="${isEdit && atchmnflList != null && fn:length(atchmnflList) > 0}">
-                    <ul class="file-list" style="margin-bottom:8px; padding:0; list-style:none;">
+                    <ul class="ecl-file-list">
                         <c:forEach var="file" items="${atchmnflList}">
-                            <li style="margin-bottom:4px;">
+                            <li>
                                 <span><c:out value="${file.orginlNm}"/></span>                                
                                 <span class="_button _small">
                                     <a href="#none" onclick="jf_atchmnflDelete('${file.atchmnflSeq}', this);">삭제</a>
@@ -763,7 +883,7 @@ function jf_atchmnflDelete(seq, trElem) {
                     </span>
                 </c:if>
                 <c:if test="${!isEdit}">
-                    <span style="color:#888;">설정 등록 후 파일을 추가할 수 있습니다.</span>
+                    <span class="ecl-hint">설정 등록 후 파일을 추가할 수 있습니다.</span>
                 </c:if>
             </div>
             <c:if test="${isEdit}">
@@ -776,7 +896,15 @@ function jf_atchmnflDelete(seq, trElem) {
         <div class="_form">
             <label class="_label">팝업 안내 메시지</label>
             <div class="_insert">
-                <textarea name="popupMsg" rows="4" class="_full"><c:out value="${setup.popupMsg}"/></textarea>
+                <textarea name="popupMsg" rows="3" class="_full"><c:out value="${setup.popupMsg}"/></textarea>
+            </div>
+            <div class="_insert _comment">STEP3 신청서 작성 화면 진입 시 alert으로 노출됩니다.</div>
+        </div>
+
+        <div class="_form">
+            <label class="_label">담당자 정보</label>
+            <div class="_insert">
+                <input type="text" name="mngInfo" class="_full" value="<c:out value='${setup.mngInfo}'/>">
             </div>
         </div>
 
@@ -785,30 +913,29 @@ function jf_atchmnflDelete(seq, trElem) {
     <%-- ============================================================
          개인정보 관리
     ============================================================ --%>
-    <h2 style="padding-top:20px; margin-bottom:10px;">개인정보 관리</h2>
+    <h2 class="ecl-section-h2">개인정보 관리</h2>
+    
     <div class="_write _labelW01">
-        <div class="_form">
-            <label class="_label">개인정보 수집·이용 목적</label>
-            <div class="_insert">
-                <textarea name="privacyPurpose" rows="4" class="_full"><c:out value="${setup.privacyPurpose}"/></textarea>
-            </div>
-        </div>
-
-        <div class="_form">
-            <label class="_label">수집하는 개인정보 항목</label>
-            <div class="_insert">
-                <textarea name="privacyItems" rows="4" class="_full"><c:out value="${setup.privacyItems}"/></textarea>
-            </div>
-        </div>
-
-        <div class="_form">
-            <label class="_label">개인정보 보유 및 이용기간</label>
-            <div class="_insert">
-                <textarea name="privacyPeriod" rows="2" class="_full" style="height:50px;"><c:out value="${setup.privacyPeriod}"/></textarea>
-            </div>
-        </div>
-    </div>
-
+		<div class="_form" style="padding-left: 185px;">
+			<label for="privacyPurpose" class="_label" style="font-size: 0.9em !important; text-align: center; width: 185px;">개인정보의 수집·이용 목적</label>
+			<div class="_insert">
+				<input type="text" name="privacyPurpose" class="_full" value="<c:out value='${setup.privacyPurpose}'/>">
+			</div>
+		</div>
+		<div class="_form" style="padding-left: 185px;">
+			<label for="privacyItems" class="_label" style="font-size: 0.9em !important; text-align: center; width: 185px;">수집하는 개인정보의 항목</label>
+			<div class="_insert">
+				<input type="text" name="privacyItems" class="_full" value="<c:out value='${setup.privacyItems}'/>">
+			</div>
+		</div>
+		<div class="_form" style="padding-left: 185px;">
+			<label for="privacyPeriod" class="_label" style="font-size: 0.9em !important; text-align: center; width: 185px;">개인정보의 보유 및 이용기간</label>
+			<div class="_insert">
+				<input type="text" name="privacyPeriod" class="_full" value="<c:out value='${setup.privacyPeriod}'/>">
+			</div>
+		</div>
+	</div>
+	
     <div class="_areaButton">
         <span class="_button _large _active">
             <input type="button" onclick="jf_setupSave();" value="${isEdit ? '저장' : '등록'}">
@@ -827,10 +954,10 @@ function jf_atchmnflDelete(seq, trElem) {
 <%-- ============================================================
      탭2: 휴일 관리
 ============================================================ --%>
-<div id="tabHoliday" class="tab-content" style="display:none;">
+<div id="tabHoliday" class="tab-content ecl-hidden">
     <table id="tblHoliday" class="_table _list">
         <colgroup>
-            <col style="width:160px;"><col style="width:auto;"><col style="width:155px;">
+            <col class="ecl-col-160"><col><col class="ecl-col-155">
         </colgroup>
         <thead>
             <tr><th>휴일 일자</th><th>휴일명</th><th>관리</th></tr>
@@ -853,15 +980,15 @@ function jf_atchmnflDelete(seq, trElem) {
                             </td>
                         </tr>
                         <%-- 수정 행 (숨김) --%>
-                        <tr id="editHoliday_${holiday.holidaySeq}" class="edit-row" style="display:none;">
+                        <tr id="editHoliday_${holiday.holidaySeq}" class="edit-row ecl-hidden">
                             <td>
                                 <input type="text" id="editHolidayDt_${holiday.holidaySeq}"
-                                    class="jf-datepicker" style="width:125px;"
+                                    class="jf-datepicker ecl-input-date-hol"
                                     value="<fmt:formatDate value='${holiday.holidayDt}' pattern='yyyy-MM-dd'/>">
                             </td>
                             <td>
                                 <input type="text" id="editHolidayNm_${holiday.holidaySeq}"
-                                    value="<c:out value='${holiday.holidayNm}'/>" style="width:100%;">
+                                    value="<c:out value='${holiday.holidayNm}'/>" class="ecl-input-full">
                             </td>
                             <td>
                                 <span class="_button _small _active">
@@ -880,7 +1007,7 @@ function jf_atchmnflDelete(seq, trElem) {
             </c:choose>
             <tr class="_addRow">
                 <td>
-                    <input type="text" id="newHolidayDt" class="jf-datepicker" style="width:130px;" placeholder="yyyy-MM-dd">
+                    <input type="text" id="newHolidayDt" class="jf-datepicker ecl-input-date-hol" placeholder="yyyy-MM-dd">
                 </td>
                 <td><input type="text" id="newHolidayReason" class="_full" placeholder="휴일명(예: 설날, 임시공휴일)"></td>
                 <td>

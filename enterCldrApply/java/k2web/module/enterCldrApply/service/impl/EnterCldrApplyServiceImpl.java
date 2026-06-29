@@ -1,8 +1,27 @@
 package k2web.module.enterCldrApply.service.impl;
 
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+
+import jxl.Workbook;
+import jxl.format.UnderlineStyle;
+import jxl.write.Alignment;
+import jxl.write.Border;
+import jxl.write.BorderLineStyle;
+import jxl.write.Colour;
+import jxl.write.Label;
+import jxl.write.VerticalAlignment;
+import jxl.write.WritableCellFormat;
+import jxl.write.WritableFont;
+import jxl.write.WritableSheet;
+import jxl.write.WritableWorkbook;
+import jxl.write.WriteException;
 
 import javax.annotation.Resource;
 
@@ -97,6 +116,10 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
     @Override
     @Transactional
     public void setSetupRegist(EnterCldrSetup setup, String rgsId) {
+        setup.setRecvStartDt(applyHour(setup.getRecvStartDt(), setup.getRecvStartHour()));
+        setup.setRecvEndDt(applyHour(setup.getRecvEndDt(), setup.getRecvEndHour()));
+        setup.setModStartDt(applyHour(setup.getModStartDt(), setup.getModStartHour()));
+        setup.setModEndDt(applyHour(setup.getModEndDt(), setup.getModEndHour()));
         Date now = TimeInfoUtil.getDate();
         setup.setRgsde(now);
         setup.setRgsId(rgsId);
@@ -161,12 +184,15 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
             db.setApplyTarget(setup.getApplyTarget());
             db.setLocation(setup.getLocation());
             db.setContent(setup.getContent());
-            db.setRecvStartDt(setup.getRecvStartDt());
-            db.setRecvEndDt(setup.getRecvEndDt());
-            db.setModStartDt(setup.getModStartDt());
-            db.setModEndDt(setup.getModEndDt());
+            db.setEvtStartDt(setup.getEvtStartDt());
+            db.setEvtEndDt(setup.getEvtEndDt());
+            db.setRecvStartDt(applyHour(setup.getRecvStartDt(), setup.getRecvStartHour()));
+            db.setRecvEndDt(applyHour(setup.getRecvEndDt(), setup.getRecvEndHour()));
+            db.setModStartDt(applyHour(setup.getModStartDt(), setup.getModStartHour()));
+            db.setModEndDt(applyHour(setup.getModEndDt(), setup.getModEndHour()));
             db.setDplcAplyPsblYn(setup.getDplcAplyPsblYn());
             db.setPopupMsg(setup.getPopupMsg());
+            db.setMngInfo(setup.getMngInfo());
             db.setPrivacyPurpose(setup.getPrivacyPurpose());
             db.setPrivacyItems(setup.getPrivacyItems());
             db.setPrivacyPeriod(setup.getPrivacyPeriod());
@@ -195,6 +221,11 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
     @Override
     public List<EnterCldrAtchmnfl> getAtchmnflList(Integer setupSeq) {
         return enterCldrApplyDao.getAtchmnflList(setupSeq);
+    }
+
+    @Override
+    public EnterCldrAtchmnfl getAtchmnfl(Integer seq) {
+        return enterCldrApplyDao.getAtchmnfl(seq);
     }
 
     @Override
@@ -337,7 +368,9 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
         EnterCldrFormItem db = enterCldrApplyDao.getFormItem(formItem.getFormItemSeq());
         if (db != null) {
             db.setItemNm(formItem.getItemNm());
-            db.setItemType(formItem.getItemType());
+            if (!"Y".equals(db.getFixedYn())) {
+                db.setItemType(formItem.getItemType());
+            }
             db.setRequiredYn(formItem.getRequiredYn());
             db.setItemOptions(formItem.getItemOptions());
             db.setSortNo(formItem.getSortNo());
@@ -455,9 +488,59 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
         }
     }
 
+    /**
+     * 신청 등록 — 슬롯 행 비관적 잠금(SELECT FOR UPDATE) 후 정원 재확인 + 저장을 원자적으로 처리.
+     * 동시에 여러 사용자가 마지막 자리를 신청해도 단 한 명만 성공한다.
+     *
+     * 처리 순서:
+     *   1) 슬롯 행 잠금 → 같은 슬롯의 다른 신청 트랜잭션은 여기서 대기
+     *   2) 잠금 상태에서 현재 접수 건수 재확인
+     *   3) 정원 이내면 등록, 초과면 실패 메시지 반환
+     *   4) 트랜잭션 커밋 시 잠금 해제 → 대기 중인 다음 트랜잭션 실행
+     *
+     * @return null: 등록 성공, 문자열: 실패 사유 메시지
+     */
     @Override
     @Transactional
-    public void setArtclUpdt(EnterCldrArtcl artcl, String updId) {
+    public String tryArtclRegist(EnterCldrArtcl artcl) {
+        String artclDtStr = artcl.getArtclDt() != null
+            ? new SimpleDateFormat("yyyy-MM-dd").format(artcl.getArtclDt()) : "";
+
+        // 1. 슬롯 행 비관적 잠금 — 이 시점부터 같은 슬롯의 다른 트랜잭션은 대기
+        EnterCldrTimeSlot slot = enterCldrApplyDao.getTimeSlotWithLock(artcl.getTimeSlotSeq());
+        if (slot == null) {
+            return "유효하지 않은 시간대입니다.";
+        }
+
+        // 2. 잠금 상태에서 현재 접수 건수 재확인 (정원 0 = 무제한)
+        if (slot.getCapacity() != null && slot.getCapacity() > 0) {
+            long applied = enterCldrApplyDao.getArtclSlotCount(artcl.getTimeSlotSeq(), artclDtStr);
+            if (applied >= slot.getCapacity()) {
+                return "선택하신 시간대의 정원이 마감되었습니다.";
+            }
+        }
+
+        // 3. 정원 이내 — 등록
+        artcl.setArtclStatus("WAIT");
+        artcl.setDelYn("N");
+        Date now = TimeInfoUtil.getDate();
+        artcl.setRgsde(now);
+        artcl.setUpdde(now);
+        enterCldrApplyDao.setArtclRegist(artcl);
+
+        List<EnterCldrArtclTarget> targetList = artcl.getTargetList();
+        if (targetList != null) {
+            for (EnterCldrArtclTarget target : targetList) {
+                target.setArtclSeq(artcl.getArtclSeq());
+                enterCldrApplyDao.setArtclTargetRegist(target);
+            }
+        }
+        return null; // 성공
+    }
+
+    @Override
+    @Transactional
+    public void setArtclUpdt(EnterCldrArtcl artcl, boolean isManage) {
         EnterCldrArtcl db = enterCldrApplyDao.getArtcl(artcl.getSetupSeq(), artcl.getArtclSeq());
         if (db != null) {
             db.setTimeSlotSeq(artcl.getTimeSlotSeq());
@@ -478,7 +561,12 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
             db.setAdditm11(artcl.getAdditm11()); db.setAdditm12(artcl.getAdditm12());
             db.setAdditm13(artcl.getAdditm13()); db.setAdditm14(artcl.getAdditm14());
             db.setAdditm15(artcl.getAdditm15());
-            db.setUpdde(TimeInfoUtil.getDate());
+            
+            if(!isManage) {
+            	//사용자가 수정했을 경우에만 수정일시 갱신
+            	db.setUpdde(TimeInfoUtil.getDate());
+            }
+            
             enterCldrApplyDao.setArtclUpdt(db);
 
             enterCldrApplyDao.deleteArtclTargetByArtcl(db.getArtclSeq());
@@ -495,11 +583,11 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
 
     @Override
     @Transactional
-    public void setArtclStatusUpdt(Integer setupSeq, Integer artclSeq, String artclStatus, String updId) {
+    public void setArtclStatusUpdt(Integer setupSeq, Integer artclSeq, String artclStatus, boolean isManage) {
         EnterCldrArtcl db = enterCldrApplyDao.getArtcl(setupSeq, artclSeq);
         if (db != null) {
             db.setArtclStatus(artclStatus);
-            db.setUpdde(TimeInfoUtil.getDate());
+            db.setStatusUpdde(TimeInfoUtil.getDate());
             enterCldrApplyDao.setArtclUpdt(db);
         }
     }
@@ -542,6 +630,134 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
         return (int) Math.max(0, capacity - applied);
     }
 
+    @Override
+    public List<EnterCldrTimeSlot> getTimeSlotListForEdit(Integer setupSeq, Integer artclSeq, String artclDt) {
+        List<EnterCldrTimeSlot> slots = enterCldrApplyDao.getTimeSlotList(setupSeq);
+        if (slots == null) return new ArrayList<>();
+        for (EnterCldrTimeSlot slot : slots) {
+            if (slot.getCapacity() != null && slot.getCapacity() > 0
+                    && artclDt != null && !artclDt.isEmpty()) {
+                long cnt = enterCldrApplyDao.getArtclSlotCountExcluding(slot.getSlotSeq(), artclDt, artclSeq);
+                slot.setBookedCount((int) cnt);
+            }
+        }
+        return slots;
+    }
+
+    @Override
+    public String excelDown(EnterCldrApplyVo vo) {
+        EnterCldrSetup setup = enterCldrApplyDao.getSetup(vo.getFindSetupSeq());
+
+        EnterCldrApplyVo allVo = new EnterCldrApplyVo();
+        allVo.setFindSetupSeq(vo.getFindSetupSeq());
+        allVo.setPage(1);
+        allVo.setRow(99999);
+        List<EnterCldrArtcl> artclList = enterCldrApplyDao.getArtclList(allVo);
+
+        SimpleDateFormat sdf  = new SimpleDateFormat("yyyyMMdd",           Locale.KOREA);
+        SimpleDateFormat sdf2 = new SimpleDateFormat("yyyy-MM-dd",         Locale.KOREA);
+        SimpleDateFormat sdf3 = new SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.KOREA);
+
+        String today = sdf.format(TimeInfoUtil.getDate());
+        StringBuilder filePath = new StringBuilder(K2Path.getFileTempPath() + today + "/");
+
+        String excelFilePath = null;
+        WritableWorkbook workbook = null;
+        try {
+            FileUtil.makeDirectorys(filePath.toString());
+            String setupNm = (setup != null && setup.getSetupNm() != null) ? setup.getSetupNm() : "신청자";
+            filePath.append(setupNm).append("_신청자 리스트_").append(today).append(".xls");
+            workbook = Workbook.createWorkbook(new File(filePath.toString()));
+            WritableSheet sheet = workbook.createSheet("신청자 리스트_" + today, 0);
+
+            WritableFont   titleFont   = new WritableFont(WritableFont.ARIAL, 10, WritableFont.BOLD, false, UnderlineStyle.NO_UNDERLINE);
+            WritableCellFormat titleFmt = new WritableCellFormat(titleFont);
+            titleFmt.setBackground(Colour.GREY_25_PERCENT);
+            titleFmt.setBorder(Border.ALL, BorderLineStyle.THIN);
+            titleFmt.setAlignment(Alignment.CENTRE);
+            titleFmt.setVerticalAlignment(VerticalAlignment.CENTRE);
+
+            WritableFont   cellFont    = new WritableFont(WritableFont.ARIAL, 10);
+            WritableCellFormat centerFmt = new WritableCellFormat(cellFont);
+            centerFmt.setBackground(Colour.WHITE);
+            centerFmt.setBorder(Border.ALL, BorderLineStyle.THIN);
+            centerFmt.setAlignment(Alignment.CENTRE);
+            centerFmt.setVerticalAlignment(VerticalAlignment.CENTRE);
+
+            WritableCellFormat leftFmt = new WritableCellFormat(cellFont);
+            leftFmt.setBackground(Colour.WHITE);
+            leftFmt.setBorder(Border.ALL, BorderLineStyle.THIN);
+            leftFmt.setAlignment(Alignment.LEFT);
+            leftFmt.setVerticalAlignment(VerticalAlignment.CENTRE);
+
+            String[] headers = {
+                "번호", "신청일자", "신청시각", "신청자명", "휴대전화", "이메일",
+                "고교코드", "고교명", "고교지역", "고교유형", "동반인원", "신청상태",
+                "등록일시", "수정일시",
+                "추가항목1", "추가항목2", "추가항목3", "추가항목4", "추가항목5",
+                "추가항목6", "추가항목7", "추가항목8", "추가항목9", "추가항목10",
+                "추가항목11", "추가항목12", "추가항목13", "추가항목14", "추가항목15"
+            };
+            for (int c = 0; c < headers.length; c++) {
+                sheet.addCell(new Label(c, 0, headers[c], titleFmt));
+            }
+
+            if (artclList != null) {
+                for (int i = 0; i < artclList.size(); i++) {
+                    EnterCldrArtcl artcl = artclList.get(i);
+                    // applyTime 조회
+                    if (artcl.getTimeSlotSeq() != null) {
+                        EnterCldrTimeSlot slot = enterCldrApplyDao.getTimeSlot(artcl.getTimeSlotSeq());
+                        if (slot != null) artcl.setApplyTime(slot.getApplyTime());
+                    }
+                    String statusNm = "승인대기";
+                    if      ("APPROVED".equals(artcl.getArtclStatus())) statusNm = "승인";
+                    else if ("REJECTED".equals(artcl.getArtclStatus())) statusNm = "미승인";
+                    else if ("CANCELED".equals(artcl.getArtclStatus())) statusNm = "취소";
+
+                    int row = i + 1;
+                    int col = 0;
+                    sheet.addCell(new Label(col++, row, String.valueOf(row),                                       centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getArtclDt()   != null ? sdf2.format(artcl.getArtclDt())   : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getApplyTime() != null ? artcl.getApplyTime()               : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getRqstNm()    != null ? artcl.getRqstNm()                  : "", leftFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getRqstTel()   != null ? artcl.getRqstTel()                 : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getRqstMl()    != null ? artcl.getRqstMl()                  : "", leftFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getSchCd()     != null ? artcl.getSchCd()                   : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getSchNm()     != null ? artcl.getSchNm()                   : "", leftFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getSchLc()     != null ? artcl.getSchLc()                   : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getSchTp()     != null ? artcl.getSchTp()                   : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getCompanionCnt() != null ? String.valueOf(artcl.getCompanionCnt()) : "0", centerFmt));
+                    sheet.addCell(new Label(col++, row, statusNm,                                                  centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getRgsde()  != null ? sdf3.format(artcl.getRgsde())  : "", centerFmt));
+                    sheet.addCell(new Label(col++, row, artcl.getUpdde()  != null ? sdf3.format(artcl.getUpdde())  : "", centerFmt));
+
+                    String[] additms = {
+                        artcl.getAdditm1(),  artcl.getAdditm2(),  artcl.getAdditm3(),
+                        artcl.getAdditm4(),  artcl.getAdditm5(),  artcl.getAdditm6(),
+                        artcl.getAdditm7(),  artcl.getAdditm8(),  artcl.getAdditm9(),
+                        artcl.getAdditm10(), artcl.getAdditm11(), artcl.getAdditm12(),
+                        artcl.getAdditm13(), artcl.getAdditm14(), artcl.getAdditm15()
+                    };
+                    for (String val : additms) {
+                        sheet.addCell(new Label(col++, row, val != null ? val : "", leftFmt));
+                    }
+                }
+            }
+            workbook.write();
+            excelFilePath = filePath.toString();
+        } catch (IOException e) {
+            LOG.error("엑셀 생성 오류", e);
+        } catch (WriteException e) {
+            LOG.error("엑셀 쓰기 오류", e);
+        } finally {
+            if (workbook != null) {
+                try { workbook.close(); } catch (Exception e) { LOG.error("엑셀 닫기 오류", e); }
+            }
+        }
+        return excelFilePath;
+    }
+
     /** 동적 폼 항목에 additm 값을 채워 반환 (조회/수정 화면용) */
     private List<EnterCldrFormItem> buildDynamicFormItems(EnterCldrArtcl artcl) {
         List<EnterCldrFormItem> formItems = enterCldrApplyDao.getFormItemList(artcl.getSetupSeq());
@@ -549,14 +765,24 @@ public class EnterCldrApplyServiceImpl extends EgovAbstractServiceImpl implement
         if (formItems == null) return result;
         int dynIdx = 0;
         for (EnterCldrFormItem item : formItems) {
-            String type = item.getItemType();
-            if ("RQST_NM".equals(type) || "RQST_TEL".equals(type)
-                    || "RQST_ML".equals(type) || "SCHOOL".equals(type)) continue;
+            if ("Y".equals(item.getFixedYn())) continue;
             dynIdx++;
             item.setAnswerVal(getAdditm(artcl, dynIdx));
             result.add(item);
         }
         return result;
+    }
+
+    /** Date에 시각(0~23)을 적용하여 HH:00:00으로 반환. date 또는 hour가 null이면 date 그대로 반환. */
+    private Date applyHour(Date date, Integer hour) {
+        if (date == null || hour == null) return date;
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.set(Calendar.HOUR_OF_DAY, hour);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
     }
 
     private String getAdditm(EnterCldrArtcl a, int idx) {

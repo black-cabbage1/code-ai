@@ -9,6 +9,12 @@
 
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_header.jsp"%>
 
+<style>
+.ecl-status          { font-weight: bold; font-size: 13px; }
+.ecl-status-approved { color: #d84a38; }
+.ecl-status-other    { color: #666; }
+</style>
+
 <script>
 function jf_statusUpdt(status) {
     var statusNm = {WAIT:'승인대기', APPROVED:'승인', REJECTED:'미승인', CANCELED:'취소'}[status] || status;
@@ -49,13 +55,15 @@ function jf_artclDelete() {
 </script>
 
 <%@ include file="/WEB-INF/jsp/include/mngr/manager/manager_body.jsp"%>
-<%@ include file="/WEB-INF/jsp/include/mngr/fnctInfo.jsp"%>
+<%@ include file="/WEB-INF/jsp/k2web/module/enterCldrApply/fnctMngr/fnctInfoTabs.jsp"%>
+
 
 <c:choose>
 <c:when test="${artcl != null}">
 
+<h2>신청 정보</h2>
 <div class="_view _labelW01">
-
+	
     <div class="_form">
         <label class="_label">신청 일자</label>
         <div class="_insert">
@@ -63,21 +71,28 @@ function jf_artclDelete() {
         </div>
     </div>
 
+    <c:if test="${not empty artcl.applyTime}">
+    <div class="_form">
+        <label class="_label">신청 시각</label>
+        <div class="_insert">${artcl.applyTime}</div>
+    </div>
+    </c:if>
+
     <div class="_form">
         <label class="_label">신청 상태</label>
         <div class="_insert">
             <c:choose>
                 <c:when test="${artcl.artclStatus == 'APPROVED'}">
-                    <span style="color:#d84a38;font-weight:bold;font-size:13px;">승인</span>
+                    <span class="ecl-status ecl-status-approved">승인</span>
                 </c:when>
                 <c:when test="${artcl.artclStatus == 'REJECTED'}">
-                    <span style="color:#666;font-weight:bold;font-size:13px;">미승인</span>
+                    <span class="ecl-status ecl-status-other">미승인</span>
                 </c:when>
                 <c:when test="${artcl.artclStatus == 'CANCELED'}">
-                    <span style="color:#666;font-weight:bold;font-size:13px;">취소</span>
+                    <span class="ecl-status ecl-status-other">취소</span>
                 </c:when>
                 <c:otherwise>
-                    <span style="color:#666;font-weight:bold;font-size:13px;">승인대기</span>
+                    <span class="ecl-status ecl-status-other">승인대기</span>
                 </c:otherwise>
             </c:choose>
             <c:if test="${artcl.artclStatus != 'CANCELED'}">
@@ -91,6 +106,9 @@ function jf_artclDelete() {
             <span class="_button _small">
                 <a href="#none" onclick="jf_statusUpdt('REJECTED');">미승인</a>
             </span>
+            </c:if>
+            <c:if test="${artcl.statusUpdde != null}">
+            	(상태 변경 일시 : <fmt:formatDate value="${artcl.statusUpdde}" pattern="yyyy-MM-dd HH:mm"/>)
             </c:if>
         </div>
     </div>
@@ -186,13 +204,13 @@ function jf_artclDelete() {
 
 </div><!-- ._view -->
 
-<c:url var="listUrl" value="/enterCldrApply/fnctMngr/${vo.siteId}/${setupSeq}/artclList">
+<c:url var="listUrl" value="/enterCldrApply/fnctMngr/${vo.siteId}/${setupSeq}/artclList.do">
     <c:param name="page"            value="${vo.page}"/>
     <c:param name="findArtclStatus" value="${vo.findArtclStatus}"/>
     <c:param name="findType"        value="${vo.findType}"/>
     <c:param name="findWord"        value="${vo.findWord}"/>
 </c:url>
-<c:url var="updtUrl" value="/enterCldrApply/fnctMngr/${vo.siteId}/${setupSeq}/${artcl.artclSeq}/artclUpdt">
+<c:url var="updtUrl" value="/enterCldrApply/fnctMngr/${vo.siteId}/${setupSeq}/${artcl.artclSeq}/artclUpdt.do">
     <c:param name="page"            value="${vo.page}"/>
     <c:param name="findArtclStatus" value="${vo.findArtclStatus}"/>
     <c:param name="findType"        value="${vo.findType}"/>

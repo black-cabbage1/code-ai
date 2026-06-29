@@ -1,5 +1,9 @@
 package k2web.module.enterCldrApply.web;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -23,6 +27,7 @@ import k2web.com.cmm.message.service.MessageVo;
 import k2web.com.cmm.tag.UrlTag;
 import k2web.com.cop.fnct.service.FnctService;
 import k2web.com.cop.user.service.SessionUserInfoHelper;
+import k2web.com.util.FileUtil;
 import k2web.com.util.K2Util;
 import k2web.module.enterCldrApply.service.EnterCldrApplyService;
 import k2web.module.enterCldrApply.service.EnterCldrApplyVo;
@@ -43,6 +48,10 @@ public class EnterCldrApplyFnctMngrController {
 
     private static final String FNCT_ID = EnterCldrApplyService.FNCT_ID;
     private static final String JSP_PATH = "k2web/module/" + FNCT_ID + "/fnctMngr";
+
+    private static final Set<String> ALLOWED_ARTCL_STATUSES = new HashSet<>(
+        Arrays.asList("WAIT", "APPROVED", "REJECTED", "CANCELED")
+    );
 
     @Resource(name = "EnterCldrApplyService")
     private EnterCldrApplyService enterCldrApplyService;
@@ -429,7 +438,9 @@ public class EnterCldrApplyFnctMngrController {
             EnterCldrHoliday holiday = new EnterCldrHoliday();
             holiday.setHolidaySeq(holidaySeq);
             if (holidayDt != null && !holidayDt.isEmpty()) {
-                holiday.setHolidayDt(new java.text.SimpleDateFormat("yyyy-MM-dd").parse(holidayDt));
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+                sdf.setLenient(false);
+                holiday.setHolidayDt(sdf.parse(holidayDt));
             }
             holiday.setHolidayNm(holidayNm);
             enterCldrApplyService.setHolidayUpdt(holiday, SessionUserInfoHelper.getUserId());
@@ -549,16 +560,15 @@ public class EnterCldrApplyFnctMngrController {
 		}
 		
 		boolean result = false;
-		if(processChk) {
+		if (processChk && ALLOWED_ARTCL_STATUSES.contains(artclStatus)) {
 			try {
-	            String updId = SessionUserInfoHelper.getUserId();
-	            enterCldrApplyService.setArtclStatusUpdt(setupSeq, artclSeq, artclStatus, updId);
+	            enterCldrApplyService.setArtclStatusUpdt(setupSeq, artclSeq, artclStatus, true);
 	            result = true;
 	        } catch (DataAccessException e) {
 	            LOG.error("신청 상태 변경 오류", e);
 	        }
 		}
-        
+
         JsonObject jsonObj = new JsonObject();
 		jsonObj.addProperty("result", result);
 		ResponseUtil.setJsonDataToResponse(response, jsonObj);
@@ -617,8 +627,13 @@ public class EnterCldrApplyFnctMngrController {
 
         model.addAttribute("setup", setup);
         model.addAttribute("setupSeq", setupSeq);
-        model.addAttribute("artcl", enterCldrApplyService.getArtcl(setupSeq, artclSeq));
-        model.addAttribute("timeSlotList", enterCldrApplyService.getTimeSlotList(setupSeq));
+        EnterCldrArtcl artcl = enterCldrApplyService.getArtcl(setupSeq, artclSeq);
+        String artclDtStr = "";
+        if (artcl != null && artcl.getArtclDt() != null) {
+            artclDtStr = new java.text.SimpleDateFormat("yyyy-MM-dd").format(artcl.getArtclDt());
+        }
+        model.addAttribute("artcl", artcl);
+        model.addAttribute("timeSlotList", enterCldrApplyService.getTimeSlotListForEdit(setupSeq, artclSeq, artclDtStr));
         model.addAttribute("targetItemList", enterCldrApplyService.getTargetItemList(setupSeq));
         return JSP_PATH + "/artclUpdt";
     }
@@ -632,21 +647,46 @@ public class EnterCldrApplyFnctMngrController {
             EnterCldrArtcl artcl,
             HttpServletResponse response) {
 
-        artcl.setSetupSeq(setupSeq);
-        artcl.setArtclSeq(artclSeq);
+    	boolean processChk = true;
+		EnterCldrSetup setup = enterCldrApplyService.getSetup(setupSeq);
+		if (setup != null) {
+			if ("N".equals(setup.getUseYn())) {
+				processChk = false;
+			}
+		} else {
+			processChk = false;
+		}
 
-        boolean result = false;
-        try {
-            String updId = SessionUserInfoHelper.getUserId();
-            enterCldrApplyService.setArtclUpdt(artcl, updId);
-            result = true;
-        } catch (DataAccessException e) {
-            LOG.error("신청 수정(관리자) 오류", e);
-        }
+		boolean result = false;
+		if(processChk) {
+			
+			artcl.setSetupSeq(setupSeq);
+	        artcl.setArtclSeq(artclSeq);
 
+	        try {
+	            enterCldrApplyService.setArtclUpdt(artcl, true);
+	            result = true;
+	        } catch (DataAccessException e) {
+	            LOG.error("신청 수정(관리자) 오류", e);
+	        }
+		}
+		
         JsonObject jsonObj = new JsonObject();
         jsonObj.addProperty("result", result);
         ResponseUtil.setJsonDataToResponse(response, jsonObj);
+    }
+
+    /* ===================== 엑셀 다운로드 ===================== */
+
+    @RequestMapping("/{siteId}/{setupSeq}/excelDown")
+    public void excelDown(
+            @PathVariable String siteId,
+            @PathVariable Integer setupSeq,
+            @ModelAttribute("vo") EnterCldrApplyVo vo,
+            HttpServletResponse response) {
+        vo.setFindSetupSeq(setupSeq);
+        String excelFilePath = enterCldrApplyService.excelDown(vo);
+        FileUtil.download(excelFilePath, request, response);
     }
 
     @RequestMapping( "/{siteId}/{setupSeq}/skinEstbsUpdtView" )
