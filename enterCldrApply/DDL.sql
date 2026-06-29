@@ -1,0 +1,334 @@
+-- ============================================================
+-- 캘린더형 신청 (enterCldrApply) DDL - Oracle
+-- ============================================================
+
+-- ────────────────────────────────────────────
+-- 0. 기존 테이블 DROP (의존성 역순)
+-- ────────────────────────────────────────────
+DROP TABLE ADD_ENTER_CLDR_ARTCL_ANSWER  PURGE;
+DROP TABLE ADD_ENTER_CLDR_ARTCL_TARGET  PURGE;
+DROP TABLE ADD_ENTER_CLDR_ARTCL         PURGE;
+DROP TABLE ADD_ENTER_CLDR_FORM_ITEM     PURGE;
+DROP TABLE ADD_ENTER_CLDR_TARGET_ITEM   PURGE;
+DROP TABLE ADD_ENTER_CLDR_TIME_SLOT     PURGE;
+DROP TABLE ADD_ENTER_CLDR_HOLIDAY       PURGE;
+DROP TABLE ADD_ENTER_CLDR_ATCHMNFL      PURGE;
+DROP TABLE ADD_ENTER_CLDR_SETUP         PURGE;
+
+-- ────────────────────────────────────────────
+-- 1. 설정 테이블
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_SETUP (
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    SETUP_NM               VARCHAR2(200)   NOT NULL,
+    SITE_ID                VARCHAR2(100)   NOT NULL,
+    USE_YN                 CHAR(1)         DEFAULT 'Y' NOT NULL,
+    MON_YN                 CHAR(1)         DEFAULT 'Y' NOT NULL,
+    TUE_YN                 CHAR(1)         DEFAULT 'Y' NOT NULL,
+    WED_YN                 CHAR(1)         DEFAULT 'Y' NOT NULL,
+    THU_YN                 CHAR(1)         DEFAULT 'Y' NOT NULL,
+    FRI_YN                 CHAR(1)         DEFAULT 'Y' NOT NULL,
+    SAT_YN                 CHAR(1)         DEFAULT 'N' NOT NULL,
+    SUN_YN                 CHAR(1)         DEFAULT 'N' NOT NULL,
+    COMPANION_USE_YN       CHAR(1)         DEFAULT 'N' NOT NULL,
+    TARGET_COMP_USE_YN     CHAR(1)         DEFAULT 'N' NOT NULL,
+    DPLC_APLY_PSBL_YN      CHAR(1)         DEFAULT 'N' NOT NULL,
+    INTRO                  VARCHAR2(200),
+    APPLY_TARGET           VARCHAR2(200),
+    LOCATION               VARCHAR2(200),
+    CONTENT                CLOB,
+    RECV_START_DT          DATE,
+    RECV_END_DT            DATE,
+    MOD_START_DT           DATE,
+    MOD_END_DT             DATE,
+    POPUP_MSG              CLOB,
+    PRIVACY_PURPOSE        CLOB,
+    PRIVACY_ITEMS          CLOB,
+    PRIVACY_PERIOD         VARCHAR2(500),
+    RGSDE                  DATE            NOT NULL,
+    RGS_ID                 VARCHAR2(100),
+    UPDDE                  DATE            NOT NULL,
+    UPD_ID                 VARCHAR2(100),
+    CONSTRAINT PK_ENTER_CLDR_SETUP PRIMARY KEY (SETUP_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_SETUP                     IS '캘린더형 신청 설정';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.SETUP_SEQ           IS '설정 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.SETUP_NM            IS '설정명';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.SITE_ID             IS '사이트아이디';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.USE_YN              IS '사용여부(Y:사용/N:미사용)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.MON_YN              IS '월요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.TUE_YN              IS '화요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.WED_YN              IS '수요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.THU_YN              IS '목요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.FRI_YN              IS '금요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.SAT_YN              IS '토요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.SUN_YN              IS '일요일 신청가능여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.COMPANION_USE_YN    IS '동반인원 사용여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.TARGET_COMP_USE_YN  IS '대상별인원 사용여부(Y/N)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.DPLC_APLY_PSBL_YN  IS '중복신청 허용여부(Y:허용/N:불가)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.INTRO               IS '소개';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.APPLY_TARGET        IS '신청대상';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.LOCATION            IS '장소';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.CONTENT             IS '내용(에디터)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.RECV_START_DT       IS '접수 시작일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.RECV_END_DT         IS '접수 종료일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.MOD_START_DT        IS '취소·수정 가능 시작일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.MOD_END_DT          IS '취소·수정 가능 종료일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.POPUP_MSG           IS '팝업 안내 메시지';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.PRIVACY_PURPOSE     IS '개인정보 수집·이용 목적';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.PRIVACY_ITEMS       IS '수집하는 개인정보 항목';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.PRIVACY_PERIOD      IS '개인정보 보유 및 이용기간';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.RGSDE               IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.RGS_ID              IS '등록자 ID';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.UPDDE               IS '수정일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_SETUP.UPD_ID              IS '수정자 ID';
+
+-- ────────────────────────────────────────────
+-- 2. 시간 슬롯 테이블
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_TIME_SLOT (
+    SLOT_SEQ               NUMBER(10)      NOT NULL,
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    APPLY_TIME             VARCHAR2(50)    NOT NULL,
+    CAPACITY               NUMBER(5)       DEFAULT 0 NOT NULL,
+    SORT_NO                NUMBER(5)       DEFAULT 0,
+    RGSDE                  DATE,
+    RGS_ID                 VARCHAR2(100),
+    UPDDE                  DATE,
+    UPD_ID                 VARCHAR2(100),
+    CONSTRAINT PK_ENTER_CLDR_TIME_SLOT PRIMARY KEY (SLOT_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_TIME_SLOT               IS '캘린더형 신청 시간 슬롯(회차)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.SLOT_SEQ      IS '시간 슬롯 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.SETUP_SEQ     IS '설정 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.APPLY_TIME    IS '신청 시간 텍스트(예: 10:00~11:00)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.CAPACITY      IS '회차별 최대 신청 인원(0:무제한)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.SORT_NO       IS '정렬 순서';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.RGSDE         IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.RGS_ID        IS '등록자 ID';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.UPDDE         IS '수정일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TIME_SLOT.UPD_ID        IS '수정자 ID';
+
+-- ────────────────────────────────────────────
+-- 3. 신청 대상 항목 테이블
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_TARGET_ITEM (
+    TARGET_ITEM_SEQ        NUMBER(10)      NOT NULL,
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    TARGET_NM              VARCHAR2(200)   NOT NULL,
+    SORT_NO                NUMBER(5)       DEFAULT 0,
+    RGSDE                  DATE,
+    RGS_ID                 VARCHAR2(100),
+    CONSTRAINT PK_ENTER_CLDR_TARGET_ITEM PRIMARY KEY (TARGET_ITEM_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_TARGET_ITEM                 IS '캘린더형 신청 대상 항목(대상별 인원 구분용)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TARGET_ITEM.TARGET_ITEM_SEQ IS '대상 항목 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TARGET_ITEM.SETUP_SEQ       IS '설정 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TARGET_ITEM.TARGET_NM       IS '대상명(예: 학부모, 교사)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TARGET_ITEM.SORT_NO         IS '정렬 순서';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TARGET_ITEM.RGSDE           IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_TARGET_ITEM.RGS_ID          IS '등록자 ID';
+
+-- ────────────────────────────────────────────
+-- 4. 추가 폼 항목 테이블
+--    FIXED_YN: 설정 생성 시 자동 삽입된 고정 항목 여부
+--    고정 ITEM_TYPE 값: RQST_NM, RQST_TEL, RQST_ML, SCHOOL
+--    동적 ITEM_TYPE 값: TEXT, Radio, Checkbox 등
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_FORM_ITEM (
+    FORM_ITEM_SEQ          NUMBER(10)      NOT NULL,
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    ITEM_NM                VARCHAR2(200)   NOT NULL,
+    ITEM_TYPE              VARCHAR2(50)    NOT NULL,
+    ITEM_OPTIONS           CLOB,
+    REQUIRED_YN            CHAR(1)         DEFAULT 'N' NOT NULL,
+    FIXED_YN               CHAR(1)         DEFAULT 'N' NOT NULL,
+    SORT_NO                NUMBER(5)       DEFAULT 0,
+    RGSDE                  DATE            NOT NULL,
+    RGS_ID                 VARCHAR2(100),
+    UPDDE                  DATE            NOT NULL,
+    UPD_ID                 VARCHAR2(100),
+    CONSTRAINT PK_ENTER_CLDR_FORM_ITEM PRIMARY KEY (FORM_ITEM_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_FORM_ITEM                IS '캘린더형 신청 폼 항목';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.FORM_ITEM_SEQ  IS '폼 항목 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.SETUP_SEQ      IS '설정 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.ITEM_NM        IS '항목명';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.ITEM_TYPE      IS '항목 유형(RQST_NM/RQST_TEL/RQST_ML/SCHOOL/TEXT/Radio/Checkbox 등)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.ITEM_OPTIONS   IS '선택 옵션(Radio·Checkbox 사용, 콤마 구분)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.REQUIRED_YN    IS '필수 여부(Y:필수/N:선택)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.FIXED_YN       IS '고정 항목 여부(Y:고정/N:사용자 추가) - 이름·휴대전화는 삭제 불가';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.SORT_NO        IS '정렬 순서';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.RGSDE          IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.RGS_ID         IS '등록자 ID';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.UPDDE          IS '수정일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_FORM_ITEM.UPD_ID         IS '수정자 ID';
+
+-- ────────────────────────────────────────────
+-- 5. 휴일 테이블
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_HOLIDAY (
+    HOLIDAY_SEQ            NUMBER(10)      NOT NULL,
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    HOLIDAY_DT             DATE            NOT NULL,
+    HOLIDAY_NM             VARCHAR2(200),
+    RGSDE                  DATE,
+    RGS_ID                 VARCHAR2(100),
+    CONSTRAINT PK_ENTER_CLDR_HOLIDAY PRIMARY KEY (HOLIDAY_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_HOLIDAY               IS '캘린더형 신청 휴일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_HOLIDAY.HOLIDAY_SEQ   IS '휴일 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_HOLIDAY.SETUP_SEQ     IS '설정 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_HOLIDAY.HOLIDAY_DT    IS '휴일 일자';
+COMMENT ON COLUMN ADD_ENTER_CLDR_HOLIDAY.HOLIDAY_NM    IS '휴일명(예: 설날, 임시공휴일)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_HOLIDAY.RGSDE         IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_HOLIDAY.RGS_ID        IS '등록자 ID';
+
+-- ────────────────────────────────────────────
+-- 6. 첨부파일 테이블
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_ATCHMNFL (
+    ATCHMNFL_SEQ           NUMBER(10)      NOT NULL,
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    ORGINL_NM              VARCHAR2(500),
+    CHANGE_NM              VARCHAR2(500),
+    FILE_PATH              VARCHAR2(500),
+    FILE_EXT               VARCHAR2(20),
+    RGSDE                  DATE,
+    RGS_ID                 VARCHAR2(100),
+    CONSTRAINT PK_ENTER_CLDR_ATCHMNFL PRIMARY KEY (ATCHMNFL_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_ATCHMNFL                IS '캘린더형 신청 안내 첨부파일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.ATCHMNFL_SEQ  IS '첨부파일 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.SETUP_SEQ     IS '설정 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.ORGINL_NM     IS '원본 파일명';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.CHANGE_NM     IS '저장 파일명(서버 저장명)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.FILE_PATH     IS '파일 저장 경로(일자 폴더)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.FILE_EXT      IS '파일 확장자';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.RGSDE         IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ATCHMNFL.RGS_ID        IS '등록자 ID';
+
+-- ────────────────────────────────────────────
+-- 7. 신청 테이블
+--    고정 항목 답변: RQST_NM, RQST_TEL, RQST_ML, SCH_*
+--    동적 항목 답변: ADDITM1~ADDITM15
+--      → 폼 항목(ADD_ENTER_CLDR_FORM_ITEM)을 SORT_NO 순으로 정렬 후
+--        고정 항목 제외한 n번째 동적 항목의 답변 = ADDITMn
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_ARTCL (
+    ARTCL_SEQ              NUMBER(10)      NOT NULL,
+    SETUP_SEQ              NUMBER(10)      NOT NULL,
+    TIME_SLOT_SEQ          NUMBER(10)      NOT NULL,
+    ARTCL_DT               DATE            NOT NULL,
+    -- 고정 항목
+    RQST_NM                VARCHAR2(200)   NOT NULL,
+    RQST_TEL               VARCHAR2(500)   NOT NULL,
+    RQST_ML                VARCHAR2(300),
+    SCH_CD                 VARCHAR2(100),
+    SCH_NM                 VARCHAR2(300),
+    SCH_LC                 VARCHAR2(100),
+    SCH_TP                 VARCHAR2(100),
+    -- 동반 인원
+    COMPANION_CNT          NUMBER(5),
+    -- 동적 폼 항목 답변 (정렬 순 n번째 동적 항목 → ADDITMn)
+    ADDITM1                VARCHAR2(1000),
+    ADDITM2                VARCHAR2(1000),
+    ADDITM3                VARCHAR2(1000),
+    ADDITM4                VARCHAR2(1000),
+    ADDITM5                VARCHAR2(1000),
+    ADDITM6                VARCHAR2(1000),
+    ADDITM7                VARCHAR2(1000),
+    ADDITM8                VARCHAR2(1000),
+    ADDITM9                VARCHAR2(1000),
+    ADDITM10               VARCHAR2(1000),
+    ADDITM11               VARCHAR2(1000),
+    ADDITM12               VARCHAR2(1000),
+    ADDITM13               VARCHAR2(1000),
+    ADDITM14               VARCHAR2(1000),
+    ADDITM15               VARCHAR2(1000),
+    -- 상태·관리
+    ARTCL_STATUS           VARCHAR2(20)    DEFAULT 'WAIT' NOT NULL,
+    DEL_YN                 CHAR(1)         DEFAULT 'N' NOT NULL,
+    RGSDE                  DATE            NOT NULL,
+    UPDDE                  DATE            NOT NULL,
+    CONSTRAINT PK_ENTER_CLDR_ARTCL PRIMARY KEY (ARTCL_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_ARTCL                IS '캘린더형 신청';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ARTCL_SEQ     IS '신청 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.SETUP_SEQ     IS '설정 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.TIME_SLOT_SEQ IS '시간 슬롯 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ARTCL_DT      IS '신청 일자';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.RQST_NM       IS '신청자 이름';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.RQST_TEL      IS '신청자 휴대전화(ARIA 암호화)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.RQST_ML       IS '신청자 이메일';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.SCH_CD        IS '고교 NEIS 코드';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.SCH_NM        IS '고교명';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.SCH_LC        IS '고교 지역';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.SCH_TP        IS '고교 유형';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.COMPANION_CNT IS '동반 인원 합계';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM1       IS '동적 폼 항목 답변 1번(sortNo 순 1번째 동적 항목)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM2       IS '동적 폼 항목 답변 2번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM3       IS '동적 폼 항목 답변 3번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM4       IS '동적 폼 항목 답변 4번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM5       IS '동적 폼 항목 답변 5번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM6       IS '동적 폼 항목 답변 6번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM7       IS '동적 폼 항목 답변 7번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM8       IS '동적 폼 항목 답변 8번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM9       IS '동적 폼 항목 답변 9번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM10      IS '동적 폼 항목 답변 10번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM11      IS '동적 폼 항목 답변 11번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM12      IS '동적 폼 항목 답변 12번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM13      IS '동적 폼 항목 답변 13번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM14      IS '동적 폼 항목 답변 14번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ADDITM15      IS '동적 폼 항목 답변 15번';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.ARTCL_STATUS  IS '신청상태(WAIT:승인대기/APPROVED:승인/REJECTED:미승인/CANCELED:취소)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.DEL_YN        IS '관리자 삭제여부(Y:삭제/N:정상)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.RGSDE         IS '등록일시';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL.UPDDE         IS '수정일시';
+
+-- ────────────────────────────────────────────
+-- 8. 신청 대상별 인원 테이블
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_ARTCL_TARGET (
+    TARGET_SEQ             NUMBER(10)      NOT NULL,
+    ARTCL_SEQ              NUMBER(10)      NOT NULL,
+    TARGET_ITEM_SEQ        NUMBER(10)      NOT NULL,
+    TARGET_NM              VARCHAR2(200),
+    COMP_CNT               NUMBER(5)       DEFAULT 0,
+    CONSTRAINT PK_ENTER_CLDR_ARTCL_TARGET PRIMARY KEY (TARGET_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_ARTCL_TARGET                 IS '캘린더형 신청 대상별 동반인원';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_TARGET.TARGET_SEQ      IS '대상별 인원 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_TARGET.ARTCL_SEQ       IS '신청 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_TARGET.TARGET_ITEM_SEQ IS '대상 항목 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_TARGET.TARGET_NM       IS '대상명(등록 시점 스냅샷)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_TARGET.COMP_CNT        IS '해당 대상 동반 인원 수';
+
+-- ────────────────────────────────────────────
+-- 9. 추가항목 답변 테이블 (레거시 - 미사용)
+--    답변은 ADD_ENTER_CLDR_ARTCL.ADDITM1~15 에 저장됨.
+--    Hibernate 엔티티 매핑이 남아 있으므로 테이블 구조만 유지.
+-- ────────────────────────────────────────────
+CREATE TABLE ADD_ENTER_CLDR_ARTCL_ANSWER (
+    ANSWER_SEQ             NUMBER(10)      NOT NULL,
+    ARTCL_SEQ              NUMBER(10)      NOT NULL,
+    FORM_ITEM_SEQ          NUMBER(10)      NOT NULL,
+    ITEM_NM                VARCHAR2(200),
+    ANSWER_VAL             CLOB,
+    CONSTRAINT PK_ENTER_CLDR_ARTCL_ANSWER PRIMARY KEY (ANSWER_SEQ)
+);
+
+COMMENT ON TABLE  ADD_ENTER_CLDR_ARTCL_ANSWER                IS '캘린더형 신청 추가항목 답변 (레거시-미사용)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_ANSWER.ANSWER_SEQ     IS '답변 SEQ(PK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_ANSWER.ARTCL_SEQ      IS '신청 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_ANSWER.FORM_ITEM_SEQ  IS '폼 항목 SEQ(FK)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_ANSWER.ITEM_NM        IS '항목명(등록 시점 스냅샷)';
+COMMENT ON COLUMN ADD_ENTER_CLDR_ARTCL_ANSWER.ANSWER_VAL     IS '답변 값';
