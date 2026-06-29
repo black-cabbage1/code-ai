@@ -152,7 +152,7 @@
 
     .set {
       display: grid;
-      grid-template-columns: 92px 1fr minmax(220px, 300px);
+      grid-template-columns: 92px 1fr;
       align-items: center;
       gap: 16px;
       padding: 16px;
@@ -191,29 +191,6 @@
     .n3 { background: var(--red); }
     .n4 { background: var(--gray); }
     .n5 { background: var(--green); }
-
-    .score {
-      display: grid;
-      gap: 5px;
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.35;
-    }
-
-    .score strong {
-      color: var(--accent-dark);
-      font-size: 18px;
-    }
-
-    .penalty {
-      color: #b42318;
-    }
-
-    .hint {
-      margin-top: 18px;
-      font-size: 14px;
-      color: var(--muted);
-    }
 
     @media (max-width: 680px) {
       body {
@@ -277,7 +254,6 @@
 
     <section class="content">
       <div id="sets" class="sets" aria-live="polite"></div>
-      <p class="hint">합계는 120~160이면 +10, 그 외 100~180이면 +5입니다. 최근 회차 번호를 입력하면 3개 이상 겹칠 때 감점합니다.</p>
     </section>
   </main>
 
@@ -381,7 +357,6 @@
 
     function scoreNumbers(numbers, recent) {
       let score = 100;
-      const details = ["기본 100"];
       const oddCount = numbers.filter((number) => number % 2 === 1).length;
       const evenCount = 6 - oddCount;
       const total = numbers.reduce((sum, number) => sum + number, 0);
@@ -391,59 +366,48 @@
 
       if (oddCount === 3 && evenCount === 3) {
         score += 10;
-        details.push("홀짝 3:3 +10");
       } else if (
         (oddCount === 2 && evenCount === 4) ||
         (oddCount === 4 && evenCount === 2)
       ) {
         score += 7;
-        details.push(`홀짝 ${oddCount}:${evenCount} +7`);
       }
 
       if (total >= 120 && total <= 160) {
         score += 10;
-        details.push(`합계 ${total} +10`);
       } else if (total >= 100 && total <= 180) {
         score += 5;
-        details.push(`합계 ${total} +5`);
       }
 
       if (getRangeCount(numbers) >= 4) {
         score += 10;
-        details.push("구간 4개 이상 +10");
       }
 
       if (highCount >= 2) {
         score += 5;
-        details.push("32~45 2개 이상 +5");
       }
 
       if (consecutivePairs === 1) {
         score += 3;
-        details.push("연속번호 1쌍 +3");
       }
 
       if (recent.length >= 6 && overlap >= 3) {
         score -= 30;
-        details.push(`최근 회차 ${overlap}개 겹침 -30`);
       }
 
       if (hasSameLastDigitPenalty(numbers)) {
         score -= 20;
-        details.push("같은 끝수 3개 이상 -20");
       }
 
       if (numbers.every((number) => number <= 31)) {
         score -= 20;
-        details.push("1~31에만 몰림 -20");
       }
 
       if (isFamousPattern(numbers)) {
         score -= 50;
-        details.push("유명 패턴 -50");
       }
 
-      return { score, details, total };
+      return { score, total };
     }
 
     function getScoredNumbers(count) {
@@ -484,18 +448,7 @@
           balls.appendChild(ball);
         });
 
-        const score = document.createElement("div");
-        score.className = "score";
-        score.innerHTML = `<strong>${item.score}점</strong>`;
-
-        item.details.forEach((detail) => {
-          const line = document.createElement("span");
-          line.textContent = detail;
-          if (detail.includes("-")) line.className = "penalty";
-          score.appendChild(line);
-        });
-
-        set.append(title, balls, score);
+        set.append(title, balls);
         fragment.appendChild(set);
       });
 
