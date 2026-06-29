@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>로또 당첨번호 추출기</title>
+  <title>로또 점수 번호 추출기</title>
   <style>
     :root {
       color-scheme: light;
@@ -12,6 +12,7 @@
       --text: #17202a;
       --muted: #64748b;
       --line: #d8e0e8;
+      --control: #ffffff;
       --accent: #0f766e;
       --accent-dark: #115e59;
       --yellow: #f2b705;
@@ -20,6 +21,18 @@
       --gray: #6b7280;
       --green: #22a06b;
       font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+
+    body[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #15171b;
+      --panel: #20242a;
+      --text: #f4f7fb;
+      --muted: #aab4c2;
+      --line: #3a414c;
+      --control: #171b20;
+      --accent: #14b8a6;
+      --accent-dark: #0f9488;
     }
 
     * {
@@ -83,17 +96,19 @@
     }
 
     select,
+    input,
     button {
       height: 42px;
       border-radius: 6px;
       font: inherit;
     }
 
-    select {
+    select,
+    input {
       border: 1px solid var(--line);
-      background: #fff;
+      background: var(--control);
       color: var(--text);
-      padding: 0 36px 0 12px;
+      padding: 0 12px;
     }
 
     button {
@@ -109,8 +124,19 @@
       background: var(--accent-dark);
     }
 
+    .theme-button {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+
+    .theme-button:hover {
+      background: var(--control);
+    }
+
     button:focus-visible,
-    select:focus-visible {
+    select:focus-visible,
+    input:focus-visible {
       outline: 3px solid rgba(15, 118, 110, 0.24);
       outline-offset: 2px;
     }
@@ -126,7 +152,7 @@
 
     .set {
       display: grid;
-      grid-template-columns: 92px 1fr;
+      grid-template-columns: 92px 1fr minmax(220px, 300px);
       align-items: center;
       gap: 16px;
       padding: 16px;
@@ -165,6 +191,23 @@
     .n3 { background: var(--red); }
     .n4 { background: var(--gray); }
     .n5 { background: var(--green); }
+
+    .score {
+      display: grid;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .score strong {
+      color: var(--accent-dark);
+      font-size: 18px;
+    }
+
+    .penalty {
+      color: #b42318;
+    }
 
     .hint {
       margin-top: 18px;
@@ -214,8 +257,8 @@
   <main>
     <section class="top">
       <div>
-        <h1>로또 당첨번호 추출기</h1>
-        <p>1부터 45까지 중복 없이 6개의 번호를 무작위로 추출합니다.</p>
+        <h1>로또 점수 번호 추출기</h1>
+        <p>무작위 후보를 만든 뒤 점수 조건으로 평가해서 높은 점수 조합을 보여줍니다.</p>
       </div>
       <div class="controls" aria-label="번호 추출 설정">
         <label for="setCount">게임 수</label>
@@ -225,20 +268,43 @@
           <option value="5" selected>5게임</option>
           <option value="10">10게임</option>
         </select>
+        <label for="recentNumbers">최근 회차</label>
+        <input id="recentNumbers" type="text" inputmode="numeric" placeholder="예: 3, 11, 18, 24, 32, 41">
+        <button type="button" id="themeButton" class="theme-button" aria-pressed="false">다크모드</button>
         <button type="button" id="drawButton">번호 추출</button>
       </div>
     </section>
 
     <section class="content">
       <div id="sets" class="sets" aria-live="polite"></div>
-      <p class="hint">각 게임의 번호는 오름차순으로 정렬됩니다.</p>
+      <p class="hint">합계는 120~160이면 +10, 그 외 100~180이면 +5입니다. 최근 회차 번호를 입력하면 3개 이상 겹칠 때 감점합니다.</p>
     </section>
   </main>
 
   <script>
     const setCount = document.querySelector("#setCount");
+    const recentNumbers = document.querySelector("#recentNumbers");
+    const themeButton = document.querySelector("#themeButton");
     const drawButton = document.querySelector("#drawButton");
     const sets = document.querySelector("#sets");
+    const CANDIDATE_SIZE = 600;
+
+    function applyTheme(theme) {
+      document.body.dataset.theme = theme;
+      themeButton.textContent = theme === "dark" ? "화이트모드" : "다크모드";
+      themeButton.setAttribute("aria-pressed", String(theme === "dark"));
+      localStorage.setItem("lottoTheme", theme);
+    }
+
+    function getInitialTheme() {
+      const savedTheme = localStorage.getItem("lottoTheme");
+
+      if (savedTheme === "dark" || savedTheme === "light") {
+        return savedTheme;
+      }
+
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
 
     function getBallClass(number) {
       if (number <= 10) return "n1";
@@ -260,37 +326,189 @@
       return result.sort((a, b) => a - b);
     }
 
+    function parseRecentNumbers(value) {
+      return value
+        .split(/[^0-9]+/)
+        .map(Number)
+        .filter((number, index, numbers) => (
+          number >= 1 && number <= 45 && numbers.indexOf(number) === index
+        ));
+    }
+
+    function getRangeCount(numbers) {
+      return new Set(numbers.map((number) => Math.floor((number - 1) / 10))).size;
+    }
+
+    function getConsecutivePairCount(numbers) {
+      let count = 0;
+
+      for (let i = 0; i < numbers.length - 1; i += 1) {
+        if (numbers[i + 1] - numbers[i] === 1) count += 1;
+      }
+
+      return count;
+    }
+
+    function hasSameLastDigitPenalty(numbers) {
+      const counts = new Map();
+
+      numbers.forEach((number) => {
+        const lastDigit = number % 10;
+        counts.set(lastDigit, (counts.get(lastDigit) || 0) + 1);
+      });
+
+      return [...counts.values()].some((count) => count >= 3);
+    }
+
+    function isFamousPattern(numbers) {
+      const joined = numbers.join(",");
+      const differences = numbers.slice(1).map((number, index) => number - numbers[index]);
+      const sameDifference = differences.every((difference) => difference === differences[0]);
+      const decadeCounts = new Map();
+
+      numbers.forEach((number) => {
+        const decade = Math.floor((number - 1) / 10);
+        decadeCounts.set(decade, (decadeCounts.get(decade) || 0) + 1);
+      });
+
+      return (
+        joined === "1,2,3,4,5,6" ||
+        joined === "40,41,42,43,44,45" ||
+        sameDifference ||
+        [...decadeCounts.values()].some((count) => count >= 5)
+      );
+    }
+
+    function scoreNumbers(numbers, recent) {
+      let score = 100;
+      const details = ["기본 100"];
+      const oddCount = numbers.filter((number) => number % 2 === 1).length;
+      const evenCount = 6 - oddCount;
+      const total = numbers.reduce((sum, number) => sum + number, 0);
+      const highCount = numbers.filter((number) => number >= 32 && number <= 45).length;
+      const consecutivePairs = getConsecutivePairCount(numbers);
+      const overlap = numbers.filter((number) => recent.includes(number)).length;
+
+      if (oddCount === 3 && evenCount === 3) {
+        score += 10;
+        details.push("홀짝 3:3 +10");
+      } else if (
+        (oddCount === 2 && evenCount === 4) ||
+        (oddCount === 4 && evenCount === 2)
+      ) {
+        score += 7;
+        details.push(`홀짝 ${oddCount}:${evenCount} +7`);
+      }
+
+      if (total >= 120 && total <= 160) {
+        score += 10;
+        details.push(`합계 ${total} +10`);
+      } else if (total >= 100 && total <= 180) {
+        score += 5;
+        details.push(`합계 ${total} +5`);
+      }
+
+      if (getRangeCount(numbers) >= 4) {
+        score += 10;
+        details.push("구간 4개 이상 +10");
+      }
+
+      if (highCount >= 2) {
+        score += 5;
+        details.push("32~45 2개 이상 +5");
+      }
+
+      if (consecutivePairs === 1) {
+        score += 3;
+        details.push("연속번호 1쌍 +3");
+      }
+
+      if (recent.length >= 6 && overlap >= 3) {
+        score -= 30;
+        details.push(`최근 회차 ${overlap}개 겹침 -30`);
+      }
+
+      if (hasSameLastDigitPenalty(numbers)) {
+        score -= 20;
+        details.push("같은 끝수 3개 이상 -20");
+      }
+
+      if (numbers.every((number) => number <= 31)) {
+        score -= 20;
+        details.push("1~31에만 몰림 -20");
+      }
+
+      if (isFamousPattern(numbers)) {
+        score -= 50;
+        details.push("유명 패턴 -50");
+      }
+
+      return { score, details, total };
+    }
+
+    function getScoredNumbers(count) {
+      const recent = parseRecentNumbers(recentNumbers.value);
+      const unique = new Map();
+
+      while (unique.size < CANDIDATE_SIZE) {
+        const numbers = drawNumbers();
+        const key = numbers.join(",");
+        if (!unique.has(key)) unique.set(key, scoreNumbers(numbers, recent));
+      }
+
+      return [...unique.entries()]
+        .map(([key, data]) => ({ numbers: key.split(",").map(Number), ...data }))
+        .sort((a, b) => b.score - a.score || Math.abs(140 - a.total) - Math.abs(140 - b.total))
+        .slice(0, count);
+    }
+
     function render() {
       const count = Number(setCount.value);
       const fragment = document.createDocumentFragment();
 
-      for (let i = 0; i < count; i += 1) {
+      getScoredNumbers(count).forEach((item, index) => {
         const set = document.createElement("article");
         set.className = "set";
 
         const title = document.createElement("div");
         title.className = "set-title";
-        title.textContent = `${i + 1}게임`;
+        title.textContent = `${index + 1}게임`;
 
         const balls = document.createElement("div");
         balls.className = "balls";
 
-        drawNumbers().forEach((number) => {
+        item.numbers.forEach((number) => {
           const ball = document.createElement("span");
           ball.className = `ball ${getBallClass(number)}`;
           ball.textContent = number;
           balls.appendChild(ball);
         });
 
-        set.append(title, balls);
+        const score = document.createElement("div");
+        score.className = "score";
+        score.innerHTML = `<strong>${item.score}점</strong>`;
+
+        item.details.forEach((detail) => {
+          const line = document.createElement("span");
+          line.textContent = detail;
+          if (detail.includes("-")) line.className = "penalty";
+          score.appendChild(line);
+        });
+
+        set.append(title, balls, score);
         fragment.appendChild(set);
-      }
+      });
 
       sets.replaceChildren(fragment);
     }
 
+    applyTheme(getInitialTheme());
+    themeButton.addEventListener("click", () => {
+      applyTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
+    });
     drawButton.addEventListener("click", render);
     setCount.addEventListener("change", render);
+    recentNumbers.addEventListener("change", render);
     render();
   </script>
 </body>
